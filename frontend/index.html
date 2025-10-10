@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>StoryForge - 故事熔炉</title>
+    <!-- 禁用Grammarly等扩展 -->
+    <meta name="grammarly" content="no">
+    <meta name="data-gramm" content="false">
+    <!-- 禁用其他可能干扰的扩展 -->
+    <meta name="referrer" content="no-referrer">
+    <style>
+      /* 隐藏Grammarly等扩展的图标和提示 */
+      grammarly-extension {
+        display: none !important;
+      }
+      [data-grammarly-part] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false">
+    <div id="app"></div>
+    <script type="module" src="/src/main.js"></script>
+    <!-- 禁用Grammarly的脚本 -->
+    <script>
+      // 阻止Grammarly加载
+      window.grammarly = undefined;
+      // 阻止其他扩展干扰
+      Object.defineProperty(window, 'grammarly', {
+        value: undefined,
+        writable: false
+      });
+    </script>
+  </body>
+</html>

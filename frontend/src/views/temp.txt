@@ -1,0 +1,20 @@
+// 打开章节（限制最多打开3个）
+const openChapter = (chapter) => {
+  // 检查是否已经打开
+  const existingIndex = openChapters.value.findIndex(c => c.id === chapter.id)
+  if (existingIndex > -1) {
+    // 已打开，激活该标签页
+    activeTab.value = chapter.id.toString()
+    return
+  }
+
+  // 检查是否超过最大打开数量
+  if (openChapters.value.length >= 3) {
+    ElMessage.warning('最多只能同时打开3个章节进行编辑')
+    return
+  }
+
+  // 添加到打开的章节列表
+  openChapters.value.push({ ...chapter })
+  activeTab.value = chapter.id.toString()
+}

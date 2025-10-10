@@ -1,0 +1,2 @@
+# novelapp
+an AI novelapp

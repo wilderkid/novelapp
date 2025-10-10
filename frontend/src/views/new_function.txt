@@ -1,0 +1,4 @@
+const openChapter = (chapter) => {
+  // 直接设置当前编辑的章节
+  currentChapter.value = { ...chapter }
+}

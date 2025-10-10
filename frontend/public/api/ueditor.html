@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>UEditor 后端配置</title>
+</head>
+<body>
+  <script>
+    // UEditor 后端配置模拟
+    (function() {
+      // 模拟后端配置
+      const config = {
+        // 上传图片配置
+        "imageActionName": "uploadimage",
+        "imageFieldName": "upfile",
+        "imageMaxSize": 2048000,
+        "imageAllowFiles": [".png", ".jpg", ".jpeg", ".gif", ".bmp"],
+        "imageCompressEnable": true,
+        "imageCompressBorder": 1600,
+        "imageInsertAlign": "none",
+        "imageUrlPrefix": "",
+        "imagePathFormat": "/upload/image/{yyyy}{mm}{dd}/{time}{rand:6}",
+
+        // 涂鸦上传配置
+        "scrawlActionName": "uploadscrawl",
+        "scrawlFieldName": "upfile",
+        "scrawlPathFormat": "/upload/image/{yyyy}{mm}{dd}/{time}{rand:6}",
+        "scrawlMaxSize": 2048000,
+        "scrawlUrlPrefix": "",
+        "scrawlInsertAlign": "none",
+
+        // 截图上传配置
+        "snapscreenActionName": "uploadimage",
+        "snapscreenPathFormat": "/upload/image/{yyyy}{mm}{dd}/{time}{rand:6}",
+        "snapscreenUrlPrefix": "",
+        "snapscreenInsertAlign": "none",
+
+        // 抓取远程图片配置
+        "catcherLocalDomain": ["127.0.0.1", "localhost", "img.baidu.com"],
+        "catcherActionName": "catchimage",
+        "catcherFieldName": "source",
+        "catcherPathFormat": "/upload/image/{yyyy}{mm}{dd}/{time}{rand:6}",
+        "catcherUrlPrefix": "",
+        "catcherMaxSize": 2048000,
+        "catcherAllowFiles": [".png", ".jpg", ".jpeg", ".gif", ".bmp"],
+
+        // 上传视频配置
+        "videoActionName": "uploadvideo",
+        "videoFieldName": "upfile",
+        "videoPathFormat": "/upload/video/{yyyy}{mm}{dd}/{time}{rand:6}",
+        "videoUrlPrefix": "",
+        "videoMaxSize": 102400000,
+        "videoAllowFiles": [".flv", ".swf", ".mkv", ".avi", ".rm", ".rmvb", ".mpeg", ".mpg", ".ogg", ".ogv", ".mov", ".wmv", ".mp4", ".webm", ".mp3", ".wav", ".mid"],
+
+        // 上传文件配置
+        "fileActionName": "uploadfile",
+        "fileFieldName": "upfile",
+        "filePathFormat": "/upload/file/{yyyy}{mm}{dd}/{time}{rand:6}",
+        "fileUrlPrefix": "",
+        "fileMaxSize": 51200000,
+        "fileAllowFiles": [
+          ".png", ".jpg", ".jpeg", ".gif", ".bmp",
+          ".flv", ".swf", ".mkv", ".avi", ".rm", ".rmvb", ".mpeg", ".mpg",
+          ".ogg", ".ogv", ".mov", ".wmv", ".mp4", ".webm", ".mp3", ".wav", ".mid",
+          ".rar", ".zip", ".tar", ".gz", ".7z", ".bz2", ".cab", ".iso",
+          ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".pdf", ".txt", ".md", ".xml"
+        ],
+
+        // 图片在线管理配置
+        "imageManagerActionName": "listimage",
+        "imageManagerListPath": "/upload/image/",
+        "imageManagerListSize": 20,
+        "imageManagerUrlPrefix": "",
+        "imageManagerInsertAlign": "none",
+        "imageManagerAllowFiles": [".png", ".jpg", ".jpeg", ".gif", ".bmp"],
+
+        // 列出指定目录下的图片配置
+        "imageManagerListPath": "/upload/image/",
+
+        // 文件在线管理配置
+        "fileManagerActionName": "listfile",
+        "fileManagerListPath": "/upload/file/",
+        "fileManagerUrlPrefix": "",
+        "fileManagerListSize": 20,
+        "fileManagerAllowFiles": [
+          ".png", ".jpg", ".jpeg", ".gif", ".bmp",
+          ".flv", ".swf", ".mkv", ".avi", ".rm", ".rmvb", ".mpeg", ".mpg",
+          ".ogg", ".ogv", ".mov", ".wmv", ".mp4", ".webm", ".mp3", ".wav", ".mid",
+          ".rar", ".zip", ".tar", ".gz", ".7z", ".bz2", ".cab", ".iso",
+          ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".pdf", ".txt", ".md", ".xml"
+        ]
+      };
+
+      // 获取URL参数
+      const urlParams = new URLSearchParams(window.location.search);
+      const action = urlParams.get('action');
+
+      // 根据不同的action返回不同的数据
+      if (action === 'config') {
+        // 返回配置信息
+        document.write(JSON.stringify(config));
+      } else if (action === 'uploadimage' || action === 'uploadfile' || action === 'uploadvideo') {
+        // 模拟上传成功
+        document.write(JSON.stringify({
+          "state": "SUCCESS",
+          "url": "/static/UEditorPlus/dist-min/themes/default/images/wordimage.png",
+          "title": "示例文件",
+          "original": "示例文件",
+          "type": "png",
+          "size": 12345
+        }));
+      } else {
+        // 其他操作
+        document.write(JSON.stringify({
+          "state": "SUCCESS"
+        }));
+      }
+    })();
+  </script>
+</body>
+</html>

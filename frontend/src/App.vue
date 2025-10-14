@@ -16,14 +16,7 @@
             <el-icon><Document /></el-icon>
             <span>章节管理</span>
           </el-menu-item>
-          <el-menu-item index="3">
-            <el-icon><User /></el-icon>
-            <span>角色设定</span>
-          </el-menu-item>
-          <el-menu-item index="4">
-            <el-icon><Location /></el-icon>
-            <span>世界观</span>
-          </el-menu-item>
+
           <el-menu-item index="5">
             <el-icon><Setting /></el-icon>
             <span>项目设置</span>
@@ -77,7 +70,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Document, User, Location, Setting, Close, MagicStick, Reading } from '@element-plus/icons-vue'
+import { Document, Setting, Close, MagicStick, Reading } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const showAIAssistant = ref(false)
@@ -87,8 +80,6 @@ const aiResult = ref('')
 // 示例变量提示
 const variableTips = ref([
   '{{project.title}}',
-  '{{character.主角.details.personality}}',
-  '{{world.霍格沃茨.description}}',
   '{{selection}}'
 ])
 
@@ -104,12 +95,7 @@ const handleMenuSelect = (index) => {
     case '2':
       router.push('/chapters')
       break
-    case '3':
-      router.push('/characters')
-      break
-    case '4':
-      router.push('/world')
-      break
+
     case '5':
       router.push('/settings')
       break

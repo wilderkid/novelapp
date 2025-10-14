@@ -17,16 +17,7 @@ const router = createRouter({
       name: 'chapters',
       component: () => import('../views/ChaptersView.vue')
     },
-    {
-      path: '/characters',
-      name: 'characters',
-      component: () => import('../views/CharactersView.vue')
-    },
-    {
-      path: '/world',
-      name: 'world',
-      component: () => import('../views/WorldView.vue')
-    },
+
     {
       path: '/settings',
       name: 'settings',

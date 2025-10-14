@@ -25,36 +25,7 @@ class ProjectResponse(ProjectBase):
     word_count: Optional[int] = 0
     chapter_count: Optional[int] = 0
 
-# 角色相关模式
-class CharacterBase(BaseSchema):
-    name: str
-    description: Optional[str] = None
-    plot: Optional[str] = None
 
-class CharacterCreate(CharacterBase):
-    pass
-
-class CharacterResponse(CharacterBase):
-    id: int
-    project_id: int
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-
-# 世界观相关模式
-class WorldSettingBase(BaseSchema):
-    name: str
-    type: str
-    description: Optional[str] = None
-    details: Optional[Dict[str, Any]] = None
-
-class WorldSettingCreate(WorldSettingBase):
-    pass
-
-class WorldSettingResponse(WorldSettingBase):
-    id: int
-    project_id: int
-    created_at: datetime
-    updated_at: Optional[datetime] = None
 
 # 分卷相关模式
 class VolumeBase(BaseSchema):

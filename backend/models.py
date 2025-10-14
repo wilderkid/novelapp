@@ -16,39 +16,11 @@ class Project(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     # 关系
-    characters = relationship("Character", back_populates="project")
-    world_settings = relationship("WorldSetting", back_populates="project")
+
     volumes = relationship("Volume", back_populates="project")
     chapters = relationship("Chapter", back_populates="project")
 
-class Character(Base):
-    __tablename__ = "characters"
 
-    id = Column(Integer, primary_key=True, index=True)
-    project_id = Column(Integer, ForeignKey("projects.id"))
-    name = Column(String, nullable=False)
-    description = Column(Text)
-    plot = Column(Text)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-
-    # 关系
-    project = relationship("Project", back_populates="characters")
-
-class WorldSetting(Base):
-    __tablename__ = "world_settings"
-
-    id = Column(Integer, primary_key=True, index=True)
-    project_id = Column(Integer, ForeignKey("projects.id"))
-    name = Column(String, nullable=False)
-    type = Column(String, nullable=False)  # 地点、组织、物品、概念、历史等
-    description = Column(Text)
-    details = Column(JSON)  # 存储设定的动态属性
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-
-    # 关系
-    project = relationship("Project", back_populates="world_settings")
 
 class Volume(Base):
     __tablename__ = "volumes"

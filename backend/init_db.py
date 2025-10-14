@@ -1,5 +1,5 @@
 from database import engine, Base
-from models import Project, Character, WorldSetting, Volume, Chapter, AIConfig, PromptTemplate
+from models import Project, Volume, Chapter, AIConfig, PromptTemplate
 
 def init_db():
     """初始化数据库"""

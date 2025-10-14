@@ -13,11 +13,9 @@ from typing import List, Optional
 
 from database import SessionLocal, engine, Base
 from sqlalchemy import func
-from models import Project, Character, WorldSetting, Volume, Chapter, AIConfig, PromptTemplate
+from models import Project, Volume, Chapter, AIConfig, PromptTemplate
 from schemas import (
     ProjectCreate, ProjectResponse, 
-    CharacterCreate, CharacterResponse,
-    WorldSettingCreate, WorldSettingResponse,
     VolumeCreate, VolumeResponse,
     ChapterCreate, ChapterResponse,
     AIConfigCreate, AIConfigResponse,
@@ -107,64 +105,11 @@ def delete_project(project_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "项目已删除"}
 
-# 角色相关API
-@app.get("/api/projects/{project_id}/characters", response_model=List[CharacterResponse])
-def get_characters(project_id: int, db: Session = Depends(get_db)):
-    """获取项目的所有角色"""
-    characters = db.query(Character).filter(Character.project_id == project_id).all()
-    return characters
-
-@app.post("/api/projects/{project_id}/characters", response_model=CharacterResponse)
-def create_character(project_id: int, character: CharacterCreate, db: Session = Depends(get_db)):
-    """创建新角色"""
-    db_character = Character(project_id=project_id, **character.dict())
-    db.add(db_character)
-    db.commit()
-    db.refresh(db_character)
-    return db_character
-
-@app.put("/api/characters/{character_id}", response_model=CharacterResponse)
-def update_character(character_id: int, character: CharacterCreate, db: Session = Depends(get_db)):
-    """更新角色"""
-    db_character = db.query(Character).filter(Character.id == character_id).first()
-    if not db_character:
-        raise HTTPException(status_code=404, detail="角色不存在")
-
-    for key, value in character.dict(exclude_unset=True).items():
-        setattr(db_character, key, value)
-
-    db.commit()
-    db.refresh(db_character)
-    return db_character
-
-@app.delete("/api/characters/{character_id}")
-def delete_character(character_id: int, db: Session = Depends(get_db)):
-    """删除角色"""
-    db_character = db.query(Character).filter(Character.id == character_id).first()
-    if not db_character:
-        raise HTTPException(status_code=404, detail="角色不存在")
-
-    db.delete(db_character)
-    db.commit()
-    return {"message": "角色已删除"}
 
 
 
-# 世界观相关API
-@app.get("/api/projects/{project_id}/world-settings", response_model=List[WorldSettingResponse])
-def get_world_settings(project_id: int, db: Session = Depends(get_db)):
-    """获取项目的所有世界观设置"""
-    world_settings = db.query(WorldSetting).filter(WorldSetting.project_id == project_id).all()
-    return world_settings
 
-@app.post("/api/projects/{project_id}/world-settings", response_model=WorldSettingResponse)
-def create_world_setting(project_id: int, world_setting: WorldSettingCreate, db: Session = Depends(get_db)):
-    """创建新的世界观设置"""
-    db_world_setting = WorldSetting(project_id=project_id, **world_setting.dict())
-    db.add(db_world_setting)
-    db.commit()
-    db.refresh(db_world_setting)
-    return db_world_setting
+
 
 # 分卷相关API
 @app.get("/api/projects/{project_id}/volumes", response_model=List[VolumeResponse])

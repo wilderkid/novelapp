@@ -93,3 +93,88 @@ class PromptTemplateResponse(PromptTemplateBase):
     id: int
     created_at: datetime
     updated_at: Optional[datetime] = None
+
+
+# 世界观相关模式
+class WorldviewBase(BaseSchema):
+    content: Optional[str] = None
+
+class WorldviewCreate(WorldviewBase):
+    pass
+
+class WorldviewResponse(WorldviewBase):
+    id: int
+    project_id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+# 角色相关模式
+class RPGCharacterBase(BaseSchema):
+    name: str
+    content: Optional[str] = None
+
+class RPGCharacterCreate(RPGCharacterBase):
+    pass
+
+class RPGCharacterResponse(RPGCharacterBase):
+    id: int
+    project_id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+# 组织相关模式
+class OrganizationBase(BaseSchema):
+    name: str
+    content: Optional[str] = None
+
+class OrganizationCreate(OrganizationBase):
+    pass
+
+class OrganizationResponse(OrganizationBase):
+    id: int
+    project_id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+# 超凡之力相关模式
+class SupernaturalPowerBase(BaseSchema):
+    name: str
+    content: Optional[str] = None
+
+class SupernaturalPowerCreate(SupernaturalPowerBase):
+    pass
+
+class SupernaturalPowerResponse(SupernaturalPowerBase):
+    id: int
+    project_id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+# 兵器相关模式
+class WeaponBase(BaseSchema):
+    name: str
+    content: Optional[str] = None
+
+class WeaponCreate(WeaponBase):
+    pass
+
+class WeaponResponse(WeaponBase):
+    id: int
+    project_id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+# 副本相关模式
+class DungeonBase(BaseSchema):
+    name: str
+    content: Optional[str] = None
+
+class DungeonCreate(DungeonBase):
+    pass
+
+class DungeonResponse(DungeonBase):
+    id: int
+    project_id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+

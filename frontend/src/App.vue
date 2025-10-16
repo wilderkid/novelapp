@@ -1,28 +1,39 @@
 
 <template>
   <el-container class="app-container">
-    <el-container>
-      <el-aside width="200px" class="sidebar">
-        <el-menu
-          default-active="1"
-          class="sidebar-menu"
-          @select="handleMenuSelect"
-        >
-          <el-menu-item index="1">
-            <el-icon><Reading /></el-icon>
-            <span>小说管理</span>
-          </el-menu-item>
-          <el-menu-item index="2">
-            <el-icon><Document /></el-icon>
-            <span>章节管理</span>
-          </el-menu-item>
-
-          <el-menu-item index="5">
-            <el-icon><Setting /></el-icon>
-            <span>项目设置</span>
-          </el-menu-item>
-        </el-menu>
-      </el-aside>
+    <el-container class="main-layout-container">
+            <el-aside :width="isSidebarCollapsed ? '65px' : '200px'" class="sidebar">
+              <el-menu
+                default-active="1"
+                class="sidebar-menu"
+                :collapse="isSidebarCollapsed"
+                @select="handleMenuSelect"
+              >
+                <el-menu-item index="1">
+                  <el-icon><Reading /></el-icon>
+                  <template #title><span>小说管理</span></template>
+                </el-menu-item>
+                <el-menu-item index="2">
+                  <el-icon><Document /></el-icon>
+                  <template #title><span>章节管理</span></template>
+                </el-menu-item>
+                <el-menu-item index="3">
+                  <el-icon><Collection /></el-icon>
+                  <template #title><span>资源管理</span></template>
+                </el-menu-item>
+      
+                <el-menu-item index="5">
+                  <el-icon><Setting /></el-icon>
+                  <template #title><span>项目设置</span></template>
+                </el-menu-item>
+              </el-menu>
+              <div class="sidebar-toggle" @click="toggleSidebar">
+                <el-icon>
+                  <Fold v-if="!isSidebarCollapsed" />
+                  <Expand v-else />
+                </el-icon>
+              </div>
+            </el-aside>
       <el-main class="main-content">
         <router-view />
       </el-main>
@@ -70,12 +81,17 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Document, Setting, Close, MagicStick, Reading } from '@element-plus/icons-vue'
+import { Document, Setting, Close, MagicStick, Reading, Collection, Fold, Expand } from '@element-plus/icons-vue'
 
 const router = useRouter()
+const isSidebarCollapsed = ref(false)
 const showAIAssistant = ref(false)
 const aiPrompt = ref('')
 const aiResult = ref('')
+
+const toggleSidebar = () => {
+  isSidebarCollapsed.value = !isSidebarCollapsed.value;
+};
 
 // 示例变量提示
 const variableTips = ref([
@@ -94,6 +110,9 @@ const handleMenuSelect = (index) => {
       break
     case '2':
       router.push('/chapters')
+      break
+    case '3':
+      router.push('/resources')
       break
 
     case '5':
@@ -129,13 +148,44 @@ const rejectAIResult = () => {
 <style scoped>
 .app-container {
   height: 100vh;
-  display: flex;
-  flex-direction: column;
+}
+
+.main-layout-container {
+  flex: 1;
+  overflow: hidden; /* Prevent this container from scrolling */
 }
 
 .sidebar {
   background-color: #f5f7fa;
   border-right: 1px solid #e6e6e6;
+  position: relative; /* Required for absolute positioning of child */
+  transition: width 0.3s ease;
+  padding-bottom: 40px; /* Make space for the toggle button */
+  box-sizing: border-box; /* Ensure padding is included in height */
+}
+
+.sidebar-menu {
+  height: 100%;
+  overflow: auto;
+  border-right: none;
+}
+
+.sidebar-toggle {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #606266;
+  border-top: 1px solid #e6e6e6;
+}
+
+.sidebar-toggle:hover {
+  background-color: #f0f0f0;
 }
 
 .sidebar-menu {

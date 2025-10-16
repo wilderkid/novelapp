@@ -99,3 +99,74 @@ VALUES
 (1, 1, '第一章：开端', '<p>这是第一章的内容...</p>', 150, 1),
 (1, 1, '第二章：发展', '<p>这是第二章的内容...</p>', 200, 2),
 (1, 2, '第三章：转折', '<p>这是第三章的内容...</p>', 180, 1);
+
+
+-- 新增资源管理相关表
+
+-- 创建世界观表
+CREATE TABLE worldviews (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+    content TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE
+);
+
+-- 创建RPG角色表
+CREATE TABLE rpg_characters (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    content TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE
+);
+
+-- 创建组织表
+CREATE TABLE organizations (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    content TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE
+);
+
+-- 创建超凡之力表
+CREATE TABLE supernatural_powers (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    content TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE
+);
+
+-- 创建兵器表
+CREATE TABLE weapons (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    content TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE
+);
+
+-- 创建副本表
+CREATE TABLE dungeons (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    content TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE
+);
+
+-- 为新表创建索引
+CREATE INDEX idx_worldviews_project_id ON worldviews(project_id);
+CREATE INDEX idx_rpg_characters_project_id ON rpg_characters(project_id);
+CREATE INDEX idx_organizations_project_id ON organizations(project_id);
+CREATE INDEX idx_supernatural_powers_project_id ON supernatural_powers(project_id);
+CREATE INDEX idx_weapons_project_id ON weapons(project_id);
+CREATE INDEX idx_dungeons_project_id ON dungeons(project_id);
+

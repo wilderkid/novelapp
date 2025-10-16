@@ -13,13 +13,19 @@ from typing import List, Optional
 
 from database import SessionLocal, engine, Base
 from sqlalchemy import func
-from models import Project, Volume, Chapter, AIConfig, PromptTemplate
+from models import Project, Volume, Chapter, AIConfig, PromptTemplate, Worldview, RPGCharacter, Organization, SupernaturalPower, Weapon, Dungeon
 from schemas import (
     ProjectCreate, ProjectResponse, 
     VolumeCreate, VolumeResponse,
     ChapterCreate, ChapterResponse,
     AIConfigCreate, AIConfigResponse,
-    PromptTemplateCreate, PromptTemplateResponse
+    PromptTemplateCreate, PromptTemplateResponse,
+    WorldviewCreate, WorldviewResponse,
+    RPGCharacterCreate, RPGCharacterResponse,
+    OrganizationCreate, OrganizationResponse,
+    SupernaturalPowerCreate, SupernaturalPowerResponse,
+    WeaponCreate, WeaponResponse,
+    DungeonCreate, DungeonResponse
 )
 
 # 创建数据库表
@@ -313,6 +319,242 @@ def delete_prompt_template(template_id: int, db: Session = Depends(get_db)):
     db.delete(db_template)
     db.commit()
     return {"message": "提示模板已删除"}
+
+
+# 资源管理API
+
+# 世界观 (Worldview)
+@app.get("/api/projects/{project_id}/worldview", response_model=WorldviewResponse)
+def get_worldview(project_id: int, db: Session = Depends(get_db)):
+    """获取项目的世界观"""
+    worldview = db.query(Worldview).filter(Worldview.project_id == project_id).first()
+    if not worldview:
+        # 如果不存在，为该项目创建一个空的世界观
+        db_worldview = Worldview(project_id=project_id, content="")
+        db.add(db_worldview)
+        db.commit()
+        db.refresh(db_worldview)
+        return db_worldview
+    return worldview
+
+@app.put("/api/projects/{project_id}/worldview", response_model=WorldviewResponse)
+def update_worldview(project_id: int, worldview: WorldviewCreate, db: Session = Depends(get_db)):
+    """更新项目的世界观"""
+    db_worldview = db.query(Worldview).filter(Worldview.project_id == project_id).first()
+    if not db_worldview:
+        raise HTTPException(status_code=404, detail="世界观不存在")
+    
+    db_worldview.content = worldview.content
+    db.commit()
+    db.refresh(db_worldview)
+    return db_worldview
+
+# 角色 (RPGCharacter)
+@app.get("/api/projects/{project_id}/rpg_characters", response_model=List[RPGCharacterResponse])
+def get_rpg_characters(project_id: int, db: Session = Depends(get_db)):
+    """获取项目的所有角色"""
+    return db.query(RPGCharacter).filter(RPGCharacter.project_id == project_id).all()
+
+@app.post("/api/projects/{project_id}/rpg_characters", response_model=RPGCharacterResponse)
+def create_rpg_character(project_id: int, character: RPGCharacterCreate, db: Session = Depends(get_db)):
+    """为项目创建新角色"""
+    db_character = RPGCharacter(project_id=project_id, **character.dict())
+    db.add(db_character)
+    db.commit()
+    db.refresh(db_character)
+    return db_character
+
+@app.get("/api/rpg_characters/{character_id}", response_model=RPGCharacterResponse)
+def get_rpg_character(character_id: int, db: Session = Depends(get_db)):
+    """获取特定角色"""
+    character = db.query(RPGCharacter).filter(RPGCharacter.id == character_id).first()
+    if not character:
+        raise HTTPException(status_code=404, detail="角色不存在")
+    return character
+
+@app.put("/api/rpg_characters/{character_id}", response_model=RPGCharacterResponse)
+def update_rpg_character(character_id: int, character: RPGCharacterCreate, db: Session = Depends(get_db)):
+    """更新特定角色"""
+    db_character = db.query(RPGCharacter).filter(RPGCharacter.id == character_id).first()
+    if not db_character:
+        raise HTTPException(status_code=404, detail="角色不存在")
+    for key, value in character.dict().items():
+        setattr(db_character, key, value)
+    db.commit()
+    db.refresh(db_character)
+    return db_character
+
+@app.delete("/api/rpg_characters/{character_id}")
+def delete_rpg_character(character_id: int, db: Session = Depends(get_db)):
+    """删除特定角色"""
+    db_character = db.query(RPGCharacter).filter(RPGCharacter.id == character_id).first()
+    if not db_character:
+        raise HTTPException(status_code=404, detail="角色不存在")
+    db.delete(db_character)
+    db.commit()
+    return {"message": "角色已删除"}
+
+# 组织 (Organization)
+@app.get("/api/projects/{project_id}/organizations", response_model=List[OrganizationResponse])
+def get_organizations(project_id: int, db: Session = Depends(get_db)):
+    return db.query(Organization).filter(Organization.project_id == project_id).all()
+
+@app.post("/api/projects/{project_id}/organizations", response_model=OrganizationResponse)
+def create_organization(project_id: int, organization: OrganizationCreate, db: Session = Depends(get_db)):
+    db_organization = Organization(project_id=project_id, **organization.dict())
+    db.add(db_organization)
+    db.commit()
+    db.refresh(db_organization)
+    return db_organization
+
+@app.get("/api/organizations/{organization_id}", response_model=OrganizationResponse)
+def get_organization(organization_id: int, db: Session = Depends(get_db)):
+    organization = db.query(Organization).filter(Organization.id == organization_id).first()
+    if not organization:
+        raise HTTPException(status_code=404, detail="组织不存在")
+    return organization
+
+@app.put("/api/organizations/{organization_id}", response_model=OrganizationResponse)
+def update_organization(organization_id: int, organization: OrganizationCreate, db: Session = Depends(get_db)):
+    db_organization = db.query(Organization).filter(Organization.id == organization_id).first()
+    if not db_organization:
+        raise HTTPException(status_code=404, detail="组织不存在")
+    for key, value in organization.dict().items():
+        setattr(db_organization, key, value)
+    db.commit()
+    db.refresh(db_organization)
+    return db_organization
+
+@app.delete("/api/organizations/{organization_id}")
+def delete_organization(organization_id: int, db: Session = Depends(get_db)):
+    db_organization = db.query(Organization).filter(Organization.id == organization_id).first()
+    if not db_organization:
+        raise HTTPException(status_code=404, detail="组织不存在")
+    db.delete(db_organization)
+    db.commit()
+    return {"message": "组织已删除"}
+
+# 超凡之力 (SupernaturalPower)
+@app.get("/api/projects/{project_id}/supernatural_powers", response_model=List[SupernaturalPowerResponse])
+def get_supernatural_powers(project_id: int, db: Session = Depends(get_db)):
+    return db.query(SupernaturalPower).filter(SupernaturalPower.project_id == project_id).all()
+
+@app.post("/api/projects/{project_id}/supernatural_powers", response_model=SupernaturalPowerResponse)
+def create_supernatural_power(project_id: int, power: SupernaturalPowerCreate, db: Session = Depends(get_db)):
+    db_power = SupernaturalPower(project_id=project_id, **power.dict())
+    db.add(db_power)
+    db.commit()
+    db.refresh(db_power)
+    return db_power
+
+@app.get("/api/supernatural_powers/{power_id}", response_model=SupernaturalPowerResponse)
+def get_supernatural_power(power_id: int, db: Session = Depends(get_db)):
+    power = db.query(SupernaturalPower).filter(SupernaturalPower.id == power_id).first()
+    if not power:
+        raise HTTPException(status_code=404, detail="超凡之力不存在")
+    return power
+
+@app.put("/api/supernatural_powers/{power_id}", response_model=SupernaturalPowerResponse)
+def update_supernatural_power(power_id: int, power: SupernaturalPowerCreate, db: Session = Depends(get_db)):
+    db_power = db.query(SupernaturalPower).filter(SupernaturalPower.id == power_id).first()
+    if not db_power:
+        raise HTTPException(status_code=404, detail="超凡之力不存在")
+    for key, value in power.dict().items():
+        setattr(db_power, key, value)
+    db.commit()
+    db.refresh(db_power)
+    return db_power
+
+@app.delete("/api/supernatural_powers/{power_id}")
+def delete_supernatural_power(power_id: int, db: Session = Depends(get_db)):
+    db_power = db.query(SupernaturalPower).filter(SupernaturalPower.id == power_id).first()
+    if not db_power:
+        raise HTTPException(status_code=404, detail="超凡之力不存在")
+    db.delete(db_power)
+    db.commit()
+    return {"message": "超凡之力已删除"}
+
+# 兵器 (Weapon)
+@app.get("/api/projects/{project_id}/weapons", response_model=List[WeaponResponse])
+def get_weapons(project_id: int, db: Session = Depends(get_db)):
+    return db.query(Weapon).filter(Weapon.project_id == project_id).all()
+
+@app.post("/api/projects/{project_id}/weapons", response_model=WeaponResponse)
+def create_weapon(project_id: int, weapon: WeaponCreate, db: Session = Depends(get_db)):
+    db_weapon = Weapon(project_id=project_id, **weapon.dict())
+    db.add(db_weapon)
+    db.commit()
+    db.refresh(db_weapon)
+    return db_weapon
+
+@app.get("/api/weapons/{weapon_id}", response_model=WeaponResponse)
+def get_weapon(weapon_id: int, db: Session = Depends(get_db)):
+    weapon = db.query(Weapon).filter(Weapon.id == weapon_id).first()
+    if not weapon:
+        raise HTTPException(status_code=404, detail="兵器不存在")
+    return weapon
+
+@app.put("/api/weapons/{weapon_id}", response_model=WeaponResponse)
+def update_weapon(weapon_id: int, weapon: WeaponCreate, db: Session = Depends(get_db)):
+    db_weapon = db.query(Weapon).filter(Weapon.id == weapon_id).first()
+    if not db_weapon:
+        raise HTTPException(status_code=404, detail="兵器不存在")
+    for key, value in weapon.dict().items():
+        setattr(db_weapon, key, value)
+    db.commit()
+    db.refresh(db_weapon)
+    return db_weapon
+
+@app.delete("/api/weapons/{weapon_id}")
+def delete_weapon(weapon_id: int, db: Session = Depends(get_db)):
+    db_weapon = db.query(Weapon).filter(Weapon.id == weapon_id).first()
+    if not db_weapon:
+        raise HTTPException(status_code=404, detail="兵器不存在")
+    db.delete(db_weapon)
+    db.commit()
+    return {"message": "兵器已删除"}
+
+# 副本 (Dungeon)
+@app.get("/api/projects/{project_id}/dungeons", response_model=List[DungeonResponse])
+def get_dungeons(project_id: int, db: Session = Depends(get_db)):
+    return db.query(Dungeon).filter(Dungeon.project_id == project_id).all()
+
+@app.post("/api/projects/{project_id}/dungeons", response_model=DungeonResponse)
+def create_dungeon(project_id: int, dungeon: DungeonCreate, db: Session = Depends(get_db)):
+    db_dungeon = Dungeon(project_id=project_id, **dungeon.dict())
+    db.add(db_dungeon)
+    db.commit()
+    db.refresh(db_dungeon)
+    return db_dungeon
+
+@app.get("/api/dungeons/{dungeon_id}", response_model=DungeonResponse)
+def get_dungeon(dungeon_id: int, db: Session = Depends(get_db)):
+    dungeon = db.query(Dungeon).filter(Dungeon.id == dungeon_id).first()
+    if not dungeon:
+        raise HTTPException(status_code=404, detail="副本不存在")
+    return dungeon
+
+@app.put("/api/dungeons/{dungeon_id}", response_model=DungeonResponse)
+def update_dungeon(dungeon_id: int, dungeon: DungeonCreate, db: Session = Depends(get_db)):
+    db_dungeon = db.query(Dungeon).filter(Dungeon.id == dungeon_id).first()
+    if not db_dungeon:
+        raise HTTPException(status_code=404, detail="副本不存在")
+    for key, value in dungeon.dict().items():
+        setattr(db_dungeon, key, value)
+    db.commit()
+    db.refresh(db_dungeon)
+    return db_dungeon
+
+@app.delete("/api/dungeons/{dungeon_id}")
+def delete_dungeon(dungeon_id: int, db: Session = Depends(get_db)):
+    db_dungeon = db.query(Dungeon).filter(Dungeon.id == dungeon_id).first()
+    if not db_dungeon:
+        raise HTTPException(status_code=404, detail="副本不存在")
+    db.delete(db_dungeon)
+    db.commit()
+    return {"message": "副本已删除"}
+
+
 
 # 启动服务器
 if __name__ == "__main__":

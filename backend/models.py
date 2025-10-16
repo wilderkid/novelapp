@@ -26,6 +26,7 @@ class Project(Base):
     weapons = relationship("Weapon", back_populates="project")
     dungeons = relationship("Dungeon", back_populates="project")
     prompt_templates = relationship("PromptTemplate", back_populates="project")
+    ai_providers = relationship("AIProvider", back_populates="project")
 
 
 
@@ -63,19 +64,37 @@ class Chapter(Base):
     volume = relationship("Volume", back_populates="chapters")
 
 
-class AIConfig(Base):
-    __tablename__ = "ai_configs"
+class AIProvider(Base):
+    __tablename__ = "ai_providers"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(255), nullable=False)
-    api_url = Column(String(500))
-    api_key = Column(String(500))
-    model = Column(String(100))
-    temperature = Column(Float, default=0.7)
-    max_tokens = Column(Integer, default=4096)
-    is_default = Column(Boolean, default=False)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    name = Column(String, nullable=False)  # 例如: "OpenAI", "Gemini"
+    api_key = Column(String)
+    base_url = Column(String)
+    enabled = Column(Boolean, default=True)
+    is_system = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    project = relationship("Project", back_populates="ai_providers")
+    models = relationship("AIModel", back_populates="provider", cascade="all, delete-orphan")
+
+class AIModel(Base):
+    __tablename__ = "ai_models"
+
+    id = Column(Integer, primary_key=True, index=True)
+    provider_id = Column(Integer, ForeignKey("ai_providers.id"), nullable=False)
+    name = Column(String, nullable=False) # 用户友好的名称, 例如: "Creative Writing (GPT-4)"
+    model_identifier = Column(String, nullable=False) # 模型的实际ID, 例如: "gpt-4-1106-preview"
+    temperature = Column(Float, default=0.7)
+    max_tokens = Column(Integer, default=2000)
+    is_default = Column(Boolean, default=False)
+    enabled = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    provider = relationship("AIProvider", back_populates="models")
 
 
 class PromptTemplate(Base):

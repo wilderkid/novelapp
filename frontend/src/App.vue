@@ -29,6 +29,10 @@
                   <el-icon><Setting /></el-icon>
                   <template #title><span>项目设置</span></template>
                 </el-menu-item>
+                <el-menu-item index="6">
+                  <el-icon><Cpu /></el-icon>
+                  <template #title><span>AI 管理</span></template>
+                </el-menu-item>
               </el-menu>
               <div class="sidebar-toggle" @click="toggleSidebar">
                 <el-icon>
@@ -84,7 +88,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Document, Setting, Close, MagicStick, Reading, Collection, Fold, Expand } from '@element-plus/icons-vue'
+import { Document, Setting, Close, MagicStick, Reading, Collection, Fold, Expand, Cpu } from '@element-plus/icons-vue'
 import axios from 'axios';
 import { useProjectStore } from './stores/projectStore';
 
@@ -126,6 +130,9 @@ const handleMenuSelect = (index) => {
 
     case '5':
       router.push('/settings')
+      break
+    case '6':
+      router.push('/ai-management')
       break
   }
 }

@@ -91,6 +91,7 @@ class PromptTemplateCreate(PromptTemplateBase):
 
 class PromptTemplateResponse(PromptTemplateBase):
     id: int
+    project_id: int
     created_at: datetime
     updated_at: Optional[datetime] = None
 

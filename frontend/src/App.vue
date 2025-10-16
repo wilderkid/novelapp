@@ -17,11 +17,14 @@
                   <el-icon><Document /></el-icon>
                   <template #title><span>章节管理</span></template>
                 </el-menu-item>
-                <el-menu-item index="3">
-                  <el-icon><Collection /></el-icon>
-                  <template #title><span>资源管理</span></template>
-                </el-menu-item>
-      
+                          <el-menu-item index="3">
+                            <el-icon><Collection /></el-icon>
+                            <template #title><span>资源管理</span></template>
+                          </el-menu-item>
+                          <el-menu-item index="4">
+                            <el-icon><MagicStick /></el-icon>
+                            <template #title><span>提示词管理</span></template>
+                          </el-menu-item>      
                 <el-menu-item index="5">
                   <el-icon><Setting /></el-icon>
                   <template #title><span>项目设置</span></template>
@@ -82,9 +85,12 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Document, Setting, Close, MagicStick, Reading, Collection, Fold, Expand } from '@element-plus/icons-vue'
+import axios from 'axios';
+import { useProjectStore } from './stores/projectStore';
 
 const router = useRouter()
 const isSidebarCollapsed = ref(false)
+const projectStore = useProjectStore()
 const showAIAssistant = ref(false)
 const aiPrompt = ref('')
 const aiResult = ref('')
@@ -114,6 +120,9 @@ const handleMenuSelect = (index) => {
     case '3':
       router.push('/resources')
       break
+    case '4':
+      router.push('/prompts')
+      break
 
     case '5':
       router.push('/settings')
@@ -121,17 +130,34 @@ const handleMenuSelect = (index) => {
   }
 }
 
-const sendToAI = () => {
+const sendToAI = async () => {
   if (!aiPrompt.value.trim()) {
-    ElMessage.warning('请输入提示词')
-    return
+    ElMessage.warning('请输入提示词');
+    return;
+  }
+  if (!projectStore.currentProject) {
+    ElMessage.error('请先选择一个项目');
+    return;
   }
 
-  // 模拟AI响应
-  setTimeout(() => {
-    aiResult.value = '这是AI生成的内容示例，实际应用中会连接到真实的AI服务。'
-  }, 1000)
-}
+  try {
+    // Step 1: Render the prompt by calling the backend
+    const renderPayload = {
+      content: aiPrompt.value,
+      project_id: projectStore.currentProject.id,
+    };
+    const response = await axios.post('http://localhost:9009/api/prompts/render', renderPayload);
+    const renderedContent = response.data.rendered_content;
+
+    // Step 2: Use the rendered content (mock AI response for now)
+    aiResult.value = `【渲染后的内容】:\n${renderedContent}\n\n【模拟AI回复】:\n这是根据您渲染后的提示词生成的AI回复。`;
+
+  } catch (error) {
+    console.error('渲染提示词或调用AI失败:', error);
+    ElMessage.error('处理提示词失败');
+    aiResult.value = ''; // Clear previous results on error
+  }
+};
 
 const acceptAIResult = () => {
   // 在实际应用中，这里会将结果插入到编辑器中

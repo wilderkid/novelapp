@@ -555,6 +555,51 @@ def delete_dungeon(dungeon_id: int, db: Session = Depends(get_db)):
     return {"message": "副本已删除"}
 
 
+# 提示词渲染API
+@app.post("/api/prompts/render")
+def render_prompt(payload: dict, db: Session = Depends(get_db)):
+    import re
+    content = payload.get("content", "")
+    project_id = payload.get("project_id")
+
+    if not project_id:
+        raise HTTPException(status_code=400, detail="Project ID is required")
+
+    keywords = re.findall(r"\{\{\s*(.*?)\s*\}\}", content)
+    if not keywords:
+        return {"rendered_content": content}
+
+    # 数据源模型列表
+    # The order determines precedence if names are duplicated across tables.
+    search_models = [
+        RPGCharacter, Organization, SupernaturalPower, Weapon, Dungeon, Chapter, Volume, Project
+    ]
+
+    for keyword in set(keywords):
+        found_content = None
+        for model in search_models:
+            query_attr = 'name' if hasattr(model, 'name') else 'title'
+            result = db.query(model).filter(
+                getattr(model, 'project_id', None) == project_id, 
+                getattr(model, query_attr) == keyword
+            ).first()
+            
+            if result:
+                if hasattr(result, 'content') and result.content:
+                    found_content = result.content
+                elif hasattr(result, 'description') and result.description:
+                    found_content = result.description
+                else: # Fallback to name/title itself if no content/description
+                    found_content = getattr(result, query_attr, '')
+                break # Stop searching once a match is found
+        
+        if found_content:
+            content = content.replace(f"{{{{ {keyword} }}}}", found_content)
+
+    return {"rendered_content": content}
+
+
+
 
 # 启动服务器
 if __name__ == "__main__":

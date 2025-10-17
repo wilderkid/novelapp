@@ -19,6 +19,16 @@ def fix_database_structure():
         )
         conn.autocommit = True
         cursor = conn.cursor()
+
+        # 0. 删除旧的 ai_configs 表
+        print("0. 检查并删除旧的 ai_configs 表...")
+        cursor.execute("SELECT to_regclass('public.ai_configs')")
+        if cursor.fetchone()[0]:
+            print("  找到 ai_configs 表，正在删除...")
+            cursor.execute("DROP TABLE ai_configs CASCADE")
+            print("  [SUCCESS] ai_configs 表删除成功")
+        else:
+            print("  ai_configs 表不存在，无需删除")
         
         # 1. 检查并添加 chapters 表的 volume_id 列
         print("1. 检查 chapters 表的 volume_id 列...")
@@ -82,9 +92,43 @@ def fix_database_structure():
             CREATE INDEX idx_chapters_order ON chapters(volume_id, "order")
         """)
         print("  [SUCCESS] 索引重新创建成功")
-        
-        # 4. 验证修复结果
-        print("4. 更新 characters 表的结构...")
+
+        # 4. 检查并添加 prompt_templates 表的 project_id 列
+        print("4. 检查 prompt_templates 表的 project_id 列...")
+        cursor.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'prompt_templates' AND column_name = 'project_id'
+        """)
+        if not cursor.fetchone():
+            print("  添加 project_id 列到 prompt_templates 表...")
+            cursor.execute("""
+                ALTER TABLE prompt_templates 
+                ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE
+            """)
+            print("  [SUCCESS] project_id 列添加成功")
+        else:
+            print("  project_id 列已存在")
+
+        # 5. 检查并添加 ai_providers 表的 is_system 列
+        print("5. 检查 ai_providers 表的 is_system 列...")
+        cursor.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'ai_providers' AND column_name = 'is_system'
+        """)
+        if not cursor.fetchone():
+            print("  添加 is_system 列到 ai_providers 表...")
+            cursor.execute("""
+                ALTER TABLE ai_providers 
+                ADD COLUMN is_system BOOLEAN NOT NULL DEFAULT FALSE
+            """)
+            print("  [SUCCESS] is_system 列添加成功")
+        else:
+            print("  is_system 列已存在")
+
+        # 6. 更新 characters 表的结构...
+        print("6. 更新 characters 表的结构...")
 
         # 检查并删除 avatar 列
         cursor.execute("""

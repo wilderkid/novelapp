@@ -13,12 +13,13 @@ from typing import List, Optional
 
 from database import SessionLocal, engine, Base
 from sqlalchemy import func
-from models import Project, Volume, Chapter, AIConfig, PromptTemplate, Worldview, RPGCharacter, Organization, SupernaturalPower, Weapon, Dungeon
+from models import Project, Volume, Chapter, AIProvider, AIModel, PromptTemplate, Worldview, RPGCharacter, Organization, SupernaturalPower, Weapon, Dungeon
 from schemas import (
     ProjectCreate, ProjectResponse, 
     VolumeCreate, VolumeResponse,
     ChapterCreate, ChapterResponse,
-    AIConfigCreate, AIConfigResponse,
+    AIProviderCreate, AIProviderResponse, AIProviderUpdate,
+    AIModelCreate, AIModelResponse, AIModelUpdate,
     PromptTemplateCreate, PromptTemplateResponse,
     WorldviewCreate, WorldviewResponse,
     RPGCharacterCreate, RPGCharacterResponse,
@@ -37,7 +38,7 @@ app = FastAPI(title="StoryForge API", version="1.0.0")
 # 配置CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 在生产环境中应该设置具体的域名
+    allow_origins=["http://localhost:5173"],  # 允许前端来源
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -235,49 +236,90 @@ def delete_chapter(chapter_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "章节已删除"}
 
-# AI配置相关API
-@app.get("/api/projects/{project_id}/ai-config", response_model=AIConfigResponse)
-def get_ai_config(project_id: int, db: Session = Depends(get_db)):
-    """获取项目的AI配置"""
-    ai_config = db.query(AIConfig).filter(AIConfig.project_id == project_id).first()
-    if not ai_config:
-        # 如果没有配置，返回默认配置
-        return AIConfigResponse(
-            id=0,
-            project_id=project_id,
-            api_key="",
-            model="gpt-3.5-turbo",
-            base_url="https://api.openai.com/v1",
-            max_tokens=2000,
-            temperature=0.7
-        )
-    return ai_config
+# AI 提供商相关 API
+@app.get("/api/projects/{project_id}/ai-providers", response_model=List[AIProviderResponse])
+def get_ai_providers(project_id: int, db: Session = Depends(get_db)):
+    """获取项目的所有AI提供商"""
+    providers = db.query(AIProvider).filter(AIProvider.project_id == project_id).all()
+    return providers
 
-@app.post("/api/projects/{project_id}/ai-config", response_model=AIConfigResponse)
-def create_ai_config(project_id: int, ai_config: AIConfigCreate, db: Session = Depends(get_db)):
-    """创建AI配置"""
-    # 先删除旧配置
-    db.query(AIConfig).filter(AIConfig.project_id == project_id).delete()
-    
-    db_ai_config = AIConfig(project_id=project_id, **ai_config.dict())
-    db.add(db_ai_config)
+@app.post("/api/projects/{project_id}/ai-providers", response_model=AIProviderResponse)
+def create_ai_provider(project_id: int, provider: AIProviderCreate, db: Session = Depends(get_db)):
+    """为项目创建新的AI提供商"""
+    db_provider = AIProvider(**provider.model_dump(), project_id=project_id)
+    db.add(db_provider)
     db.commit()
-    db.refresh(db_ai_config)
-    return db_ai_config
+    db.refresh(db_provider)
+    return db_provider
 
-@app.put("/api/projects/{project_id}/ai-config", response_model=AIConfigResponse)
-def update_ai_config(project_id: int, ai_config: AIConfigCreate, db: Session = Depends(get_db)):
-    """更新AI配置"""
-    db_ai_config = db.query(AIConfig).filter(AIConfig.project_id == project_id).first()
-    if not db_ai_config:
-        raise HTTPException(status_code=404, detail="AI配置不存在")
+@app.put("/api/ai-providers/{provider_id}", response_model=AIProviderResponse)
+def update_ai_provider(provider_id: int, provider: AIProviderUpdate, db: Session = Depends(get_db)):
+    """更新AI提供商"""
+    db_provider = db.query(AIProvider).filter(AIProvider.id == provider_id).first()
+    if not db_provider:
+        raise HTTPException(status_code=404, detail="AI提供商不存在")
 
-    for key, value in ai_config.dict().items():
-        setattr(db_ai_config, key, value)
+    update_data = provider.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_provider, key, value)
 
     db.commit()
-    db.refresh(db_ai_config)
-    return db_ai_config
+    db.refresh(db_provider)
+    return db_provider
+
+@app.delete("/api/ai-providers/{provider_id}")
+def delete_ai_provider(provider_id: int, db: Session = Depends(get_db)):
+    """删除AI提供商"""
+    db_provider = db.query(AIProvider).filter(AIProvider.id == provider_id).first()
+    if not db_provider:
+        raise HTTPException(status_code=404, detail="AI提供商不存在")
+
+    db.delete(db_provider)
+    db.commit()
+    return {"message": "AI提供商已删除"}
+
+# AI 模型相关 API
+@app.get("/api/ai-providers/{provider_id}/ai-models", response_model=List[AIModelResponse])
+def get_ai_models_for_provider(provider_id: int, db: Session = Depends(get_db)):
+    """获取特定AI提供商的所有模型"""
+    models = db.query(AIModel).filter(AIModel.provider_id == provider_id).all()
+    return models
+
+@app.post("/api/ai-providers/{provider_id}/ai-models", response_model=AIModelResponse)
+def create_ai_model(provider_id: int, model: AIModelCreate, db: Session = Depends(get_db)):
+    """为AI提供商创建新的模型配置"""
+    db_model = AIModel(**model.model_dump(), provider_id=provider_id)
+    db.add(db_model)
+    db.commit()
+    db.refresh(db_model)
+    return db_model
+
+@app.put("/api/ai-models/{model_id}", response_model=AIModelResponse)
+def update_ai_model(model_id: int, model: AIModelUpdate, db: Session = Depends(get_db)):
+    """更新AI模型配置"""
+    db_model = db.query(AIModel).filter(AIModel.id == model_id).first()
+    if not db_model:
+        raise HTTPException(status_code=404, detail="AI模型不存在")
+
+    update_data = model.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_model, key, value)
+
+    db.commit()
+    db.refresh(db_model)
+    return db_model
+
+@app.delete("/api/ai-models/{model_id}")
+def delete_ai_model(model_id: int, db: Session = Depends(get_db)):
+    """删除AI模型配置"""
+    db_model = db.query(AIModel).filter(AIModel.id == model_id).first()
+    if not db_model:
+        raise HTTPException(status_code=404, detail="AI模型不存在")
+
+    db.delete(db_model)
+    db.commit()
+    return {"message": "AI模型已删除"}
+
 
 # 提示模板相关API
 @app.get("/api/projects/{project_id}/prompt-templates", response_model=List[PromptTemplateResponse])

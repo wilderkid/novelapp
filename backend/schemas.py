@@ -60,23 +60,45 @@ class ChapterResponse(ChapterBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
 
-# AI配置相关模式
-class AIConfigBase(BaseSchema):
+# AI模型相关模式
+class AIModelBase(BaseSchema):
     name: str
-    api_url: Optional[str] = None
-    api_key: Optional[str] = None
-    model: Optional[str] = None
+    model_identifier: str
     temperature: Optional[float] = 0.7
-    max_tokens: Optional[int] = 4096
+    max_tokens: Optional[int] = 2000
     is_default: Optional[bool] = False
+    enabled: Optional[bool] = True
 
-class AIConfigCreate(AIConfigBase):
+class AIModelCreate(AIModelBase):
     pass
 
-class AIConfigResponse(AIConfigBase):
+class AIModelUpdate(AIModelBase):
+    pass
+
+class AIModelResponse(AIModelBase):
     id: int
-    created_at: datetime
-    updated_at: Optional[datetime] = None
+    provider_id: int
+
+# AI提供商相关模式
+class AIProviderBase(BaseSchema):
+    name: str
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+    enabled: Optional[bool] = True
+    is_system: Optional[bool] = False
+
+class AIProviderCreate(AIProviderBase):
+    pass
+
+class AIProviderUpdate(AIProviderBase):
+    pass
+
+class AIProviderResponse(AIProviderBase):
+    id: int
+    project_id: int
+    is_system: bool
+    models: List[AIModelResponse] = []
+
 
 # 提示词模板相关模式
 class PromptTemplateBase(BaseSchema):

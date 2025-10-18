@@ -75,61 +75,30 @@
       </template>
     </el-dialog>
 
-    <!-- 管理模型对话框 -->
-    <el-dialog v-model="modelDialogVisible" title="管理模型" width="600px" @close="fetchProviders">
-      <div class="model-management-dialog">
-        <!-- Part 1: Fetched Models List -->
-        <div class="fetched-models-section">
-          <div class="fetched-models-header">
-            <h4>可用在线模型</h4>
-            <el-button 
-              :loading="isFetchingModels" 
-              @click="handleFetchModels" 
-              type="primary"
-            >
-              {{ fetchedModels.length > 0 ? '刷新列表' : '获取列表' }}
-            </el-button>
-          </div>
-          <el-input
-            v-if="fetchedModels.length > 0"
-            v-model="modelSearchQuery"
-            placeholder="搜索模型..."
-            clearable
-            class="model-search-input"
-          />
-          <div v-if="fetchedModels.length > 0 && filteredFetchedModels.length > 0" class="fetched-models-list">
-            <div v-for="model in filteredFetchedModels" :key="model.id" class="fetched-model-item">
-              <span>{{ model.id }}</span>
-              <el-button 
-                :icon="isModelAdded(model.id) ? Minus : Plus" 
-                circle 
-                size="small"
-                :type="isModelAdded(model.id) ? 'danger' : 'success'"
-                plain
-                @click="handleAddOrRemoveFetchedModel(model)"
-              />
-            </div>
-          </div>
-          <el-empty v-if="fetchedModels.length === 0" description="点击获取列表以显示可用模型"></el-empty>
-          <el-empty v-if="fetchedModels.length > 0 && filteredFetchedModels.length === 0" description="未找到匹配的模型"></el-empty>
-        </div>
-
-        <el-divider />
-
-        <!-- Part 2: Manual Add Form -->
-        <el-form :model="modelForm" :rules="modelFormRules" ref="modelFormRef" label-position="top" class="manual-add-form">
-          <el-form-item label="手动添加模型" prop="name">
-             <el-input v-model="modelForm.name" placeholder="模型ID (例如: gpt-4-custom)">
-              <template #append>
-                <el-button @click="handleModelSubmit" :disabled="!modelForm.name">添加</el-button>
-              </template>
-            </el-input>
-          </el-form-item>
-        </el-form>
-      </div>
+    <!-- 添加/编辑模型对话框 -->
+    <el-dialog v-model="modelDialogVisible" :title="isEditingModel ? '编辑模型' : '添加新模型'" width="500px">
+      <el-form :model="modelForm" :rules="modelFormRules" ref="modelFormRef" label-position="top">
+        <el-form-item label="模型名称" prop="name">
+          <el-input v-model="modelForm.name" placeholder="用户友好的名称, 如: 创作模型 (GPT-4)"></el-input>
+        </el-form-item>
+        <el-form-item label="模型ID" prop="model_identifier">
+          <el-input v-model="modelForm.model_identifier" placeholder="模型的实际ID, 如: gpt-4-1106-preview"></el-input>
+        </el-form-item>
+        <el-form-item label="Temperature">
+          <el-slider v-model="modelForm.temperature" :min="0" :max="2" :step="0.1"></el-slider>
+        </el-form-item>
+        <el-form-item label="Max Tokens">
+          <el-input-number v-model="modelForm.max_tokens" :min="1" :step="128"></el-input-number>
+        </el-form-item>
+        <el-form-item label="状态">
+          <el-switch v-model="modelForm.enabled" active-text="启用"></el-switch>
+          <el-switch v-model="modelForm.is_default" active-text="设为默认" style="margin-left: 20px;"></el-switch>
+        </el-form-item>
+      </el-form>
       <template #footer>
         <span class="dialog-footer">
-          <el-button @click="modelDialogVisible = false">关闭</el-button>
+          <el-button @click="modelDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="handleModelSubmit">确定</el-button>
         </span>
       </template>
     </el-dialog>
@@ -214,7 +183,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Search, View, Edit, Delete, Warning, Plus, Minus } from '@element-plus/icons-vue';
+import { Search, View, Edit, Delete, Warning } from '@element-plus/icons-vue';
 import { useProjectStore } from '../stores/projectStore';
 import * as aiService from '../services/aiService';
 
@@ -245,17 +214,51 @@ const checkApiKey = async (provider) => {
     ElMessage.warning('请先填写API Key和Base URL');
     return;
   }
-  
+
   try {
     ElMessage.info('正在验证API密钥...');
     const result = await aiService.checkApiKey(provider);
-    
+
     if (result.valid) {
       ElMessage.success('API密钥验证成功');
-      
-      // 如果获取到了模型列表，可以提示用户
+
+      // 如果获取到了模型列表，询问用户是否要自动添加
       if (result.models && result.models.length > 0) {
-        ElMessage.info(`已获取到 ${result.models.length} 个可用模型`);
+        try {
+          await ElMessageBox.confirm(
+            `已获取到 ${result.models.length} 个可用模型，是否自动添加？`,
+            '自动添加模型',
+            {
+              confirmButtonText: '确定',
+              cancelButtonText: '取消',
+              type: 'info',
+            }
+          );
+
+          // 用户确认，自动添加模型
+          ElMessage.info('正在添加模型...');
+          const addResult = await aiService.fetchAndAddModels(provider);
+
+          if (addResult.success) {
+            ElMessage.success(addResult.message);
+            fetchProviders(); // 重新加载提供商列表
+          } else {
+            ElMessage.error(addResult.message);
+          }
+        } catch (action) {
+          if (action !== 'cancel') {
+            ElMessage.error('添加模型过程中发生错误');
+            console.error(action);
+          }
+        }
+      } else {
+        // 没有获取到模型列表，提示用户手动添加
+        const { isManualModelEntryRequired } = aiService.processOpenAIUrl(provider.base_url);
+        if (isManualModelEntryRequired) {
+          ElMessage.info('该提供商不支持自动获取模型列表，请手动添加模型');
+        } else {
+          ElMessage.warning('未能获取到模型列表，请检查API配置或手动添加模型');
+        }
       }
     } else {
       ElMessage.error(`API密钥验证失败: ${result.error}`);
@@ -315,6 +318,8 @@ const openEditProviderModal = (provider) => {
   editProviderForm.value = { ...provider };
   editProviderDialogVisible.value = true;
   editProviderFormRef.value?.resetFields();
+  // 初始化URL预览
+  updateUrlPreview('edit');
 };
 
 const handleUpdateProvider = async () => {
@@ -339,8 +344,8 @@ const filteredProviders = computed(() => {
     return providers.value;
   }
   const lowerQuery = searchQuery.value.toLowerCase();
-  return providers.value.filter(p => 
-    p.name.toLowerCase().includes(lowerQuery) || 
+  return providers.value.filter(p =>
+    p.name.toLowerCase().includes(lowerQuery) ||
     p.models.some(m => m.name.toLowerCase().includes(lowerQuery) || m.model_identifier.toLowerCase().includes(lowerQuery))
   );
 });
@@ -349,9 +354,12 @@ const fetchProviders = async () => {
   try {
     const response = await aiService.getProviders();
     providers.value = response.data;
-    // 获取 providers 后，更新每个 provider 的 URL 预览
-    providers.value.forEach(p => {
-      updateUrlPreview('card', p);
+
+    // 为每个提供商初始化URL预览
+    providers.value.forEach(provider => {
+      if (provider.base_url) {
+        updateUrlPreview('card', provider);
+      }
     });
   } catch (error) {
     ElMessage.error('加载AI提供商失败');
@@ -403,136 +411,51 @@ const deleteProvider = async (provider) => {
 
 // --- 模型管理 ---
 const modelDialogVisible = ref(false);
+const isEditingModel = ref(false);
 const modelFormRef = ref(null);
-const modelForm = ref({}); // For manual adding
-const currentProviderForModel = ref(null);
-const isFetchingModels = ref(false);
-const fetchedModels = ref([]);
-const modelSearchQuery = ref('');
-
-const filteredFetchedModels = computed(() => {
-  if (!modelSearchQuery.value) {
-    return fetchedModels.value;
-  }
-  const lowerQuery = modelSearchQuery.value.toLowerCase();
-  return fetchedModels.value.filter(model => 
-    model.id.toLowerCase().includes(lowerQuery)
-  );
-});
-
+const modelForm = ref({});
 const modelFormRules = {
-  name: [{ required: true, message: '请输入模型ID', trigger: 'blur' }],
+  name: [{ required: true, message: '请输入模型名称', trigger: 'blur' }],
+  model_identifier: [{ required: true, message: '请输入模型ID', trigger: 'blur' }],
 };
 
 const openAddModelModal = (provider) => {
-  currentProviderForModel.value = provider;
-  
-  const cachedModels = sessionStorage.getItem(`models_${provider.id}`);
-  if (cachedModels) {
-    fetchedModels.value = JSON.parse(cachedModels);
-  } else {
-    fetchedModels.value = [];
-  }
-
+  isEditingModel.value = false;
   modelForm.value = {
     provider_id: provider.id,
-    name: '', // For manual add
+    name: '',
+    model_identifier: '',
+    temperature: 0.7,
+    max_tokens: 2048,
+    enabled: true,
+    is_default: false,
   };
-  
+  modelDialogVisible.value = true;
+  modelFormRef.value?.resetFields();
+};
+
+const openEditModelModal = (model) => {
+  isEditingModel.value = true;
+  modelForm.value = { ...model };
   modelDialogVisible.value = true;
 };
 
-const handleFetchModels = async () => {
-  if (!currentProviderForModel.value) return;
-  
-  const provider = providers.value.find(p => p.id === currentProviderForModel.value.id);
-  if (!provider || !provider.api_key || !provider.base_url) {
-    ElMessage.warning('请先为该提供商设置API Key和Base URL');
-    return;
-  }
-
-  isFetchingModels.value = true;
-  try {
-    const models = await aiService.getModelsFromProvider(provider);
-    fetchedModels.value = models;
-    sessionStorage.setItem(`models_${provider.id}`, JSON.stringify(models));
-
-    if (models.length > 0) {
-      ElMessage.success(`成功获取 ${models.length} 个模型`);
-    } else {
-      ElMessage.info('未找到可用的在线模型');
-    }
-  } catch (error) {
-    ElMessage.error(`获取模型失败: ${error.message}`);
-    console.error(error);
-  } finally {
-    isFetchingModels.value = false;
-  }
-};
-
-const isModelAdded = (modelIdentifier) => {
-  if (!currentProviderForModel.value || !currentProviderForModel.value.models) {
-    return false;
-  }
-  return currentProviderForModel.value.models.some(m => m.model_identifier === modelIdentifier);
-};
-
-const handleAddOrRemoveFetchedModel = async (model) => {
-  const providerId = currentProviderForModel.value.id;
-  const existingModel = currentProviderForModel.value.models.find(m => m.model_identifier === model.id);
-
-  if (existingModel) {
-    // Remove
-    try {
-      await aiService.deleteModel(existingModel.id);
-      const index = currentProviderForModel.value.models.findIndex(m => m.id === existingModel.id);
-      if (index > -1) {
-        currentProviderForModel.value.models.splice(index, 1);
-      }
-      ElMessage.success(`模型 '${model.id}' 已移除`);
-    } catch (error) {
-      ElMessage.error('移除模型失败');
-      console.error(error);
-    }
-  } else {
-    // Add
-    try {
-      const newModelData = {
-        name: model.id,
-        model_identifier: model.id,
-        enabled: true,
-        is_default: false,
-      };
-      const response = await aiService.createModel(providerId, newModelData);
-      currentProviderForModel.value.models.push(response.data);
-      ElMessage.success(`模型 '${model.id}' 已添加`);
-    } catch (error) {
-      ElMessage.error('添加模型失败');
-      console.error(error);
-    }
-  }
-};
-
-// For the manual add form
 const handleModelSubmit = async () => {
   if (!modelFormRef.value) return;
   await modelFormRef.value.validate(async (valid) => {
     if (valid) {
       try {
-        const modelData = {
-            provider_id: modelForm.value.provider_id,
-            name: modelForm.value.name,
-            model_identifier: modelForm.value.name, // Use name as identifier for manual add
-            enabled: true,
-            is_default: false,
-        };
-        const response = await aiService.createModel(modelData.provider_id, modelData);
-        currentProviderForModel.value.models.push(response.data);
-        ElMessage.success('手动添加模型成功');
-        modelForm.value.name = ''; // Clear input
-        modelFormRef.value.resetFields();
+        if (isEditingModel.value) {
+          await aiService.updateModel(modelForm.value.id, modelForm.value);
+          ElMessage.success('模型更新成功');
+        } else {
+          await aiService.createModel(modelForm.value.provider_id, modelForm.value);
+          ElMessage.success('模型添加成功');
+        }
+        modelDialogVisible.value = false;
+        fetchProviders(); // 重新加载整个提供商列表以更新模型
       } catch (error) {
-        ElMessage.error('添加失败');
+        ElMessage.error(isEditingModel.value ? '更新失败' : '添加失败');
         console.error(error);
       }
     }
@@ -635,37 +558,5 @@ const deleteModel = async (model) => {
 }
 .warning-text .el-icon {
   margin-right: 4px;
-}
-
-.fetched-models-section {
-  margin-top: 10px;
-}
-.fetched-models-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-}
-.fetched-models-header h4 {
-  margin: 0;
-}
-.fetched-models-list {
-  max-height: 200px;
-  overflow-y: auto;
-  border: 1px solid #dcdfe6;
-  border-radius: 4px;
-  padding: 10px;
-}
-.fetched-model-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 5px 0;
-}
-.manual-add-form {
-  margin-top: 10px;
-}
-.model-search-input {
-  margin-bottom: 10px;
 }
 </style>

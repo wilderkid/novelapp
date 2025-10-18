@@ -10,10 +10,17 @@ import json
 import aiofiles
 import httpx
 from typing import List, Optional
+from pydantic import BaseModel
 
 from database import SessionLocal, engine, Base
 from sqlalchemy import func
-from models import Project, Volume, Chapter, AIProvider, AIModel, PromptTemplate, Worldview, RPGCharacter, Organization, SupernaturalPower, Weapon, Dungeon
+from models import (
+    Project, Volume, Chapter, 
+    AIProvider, AIModel, PromptTemplate, 
+    Worldview, RPGCharacter, Organization, 
+    SupernaturalPower, Weapon, Dungeon, 
+    Conversation, Message
+)
 from schemas import (
     ProjectCreate, ProjectResponse, 
     VolumeCreate, VolumeResponse,
@@ -26,26 +33,27 @@ from schemas import (
     OrganizationCreate, OrganizationResponse,
     SupernaturalPowerCreate, SupernaturalPowerResponse,
     WeaponCreate, WeaponResponse,
-    DungeonCreate, DungeonResponse
+    DungeonCreate, DungeonResponse,
+    ConversationResponse, MessageResponse, ConversationUpdate
 )
 
 # 创建数据库表
 Base.metadata.create_all(bind=engine)
 
-# 创建FastAPI应用
+# FastAPI应用
 app = FastAPI(title="StoryForge API", version="1.0.0")
 
-# 配置CORS
+# CORS配置
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # 允许前端来源
+    allow_origins=["http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # 挂载静态文件
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="static")
 
 # 依赖项：获取数据库会话
 def get_db():
@@ -54,6 +62,7 @@ def get_db():
         yield db
     finally:
         db.close()
+
 
 # 项目相关API
 @app.get("/api/projects", response_model=List[ProjectResponse])
@@ -236,7 +245,25 @@ def delete_chapter(chapter_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "章节已删除"}
 
-# AI 提供商相关 API
+# AI 提供商相关 API - 全局级别
+@app.get("/api/ai-providers", response_model=List[AIProviderResponse])
+def get_global_ai_providers(db: Session = Depends(get_db)):
+    """获取所有AI提供商（全局级别）"""
+    providers = db.query(AIProvider).filter(
+        (AIProvider.project_id == None) | (AIProvider.is_system == True)
+    ).all()
+    return providers
+
+@app.post("/api/ai-providers", response_model=AIProviderResponse)
+def create_global_ai_provider(provider: AIProviderCreate, db: Session = Depends(get_db)):
+    """创建新的AI提供商（全局级别）"""
+    db_provider = AIProvider(**provider.model_dump(), project_id=None)
+    db.add(db_provider)
+    db.commit()
+    db.refresh(db_provider)
+    return db_provider
+
+# AI 提供商相关 API - 项目级别（保持原有功能）
 @app.get("/api/projects/{project_id}/ai-providers", response_model=List[AIProviderResponse])
 def get_ai_providers(project_id: int, db: Session = Depends(get_db)):
     """获取项目的所有AI提供商"""
@@ -321,17 +348,42 @@ def delete_ai_model(model_id: int, db: Session = Depends(get_db)):
     return {"message": "AI模型已删除"}
 
 
-# 提示模板相关API
+# 提示模板相关API - 全局级别
+@app.get("/api/prompt-templates", response_model=List[PromptTemplateResponse])
+def get_global_prompt_templates(db: Session = Depends(get_db)):
+    """获取所有提示模板（全局级别）"""
+    try:
+        # 获取所有提示词模板，包括全局和项目级别的
+        templates = db.query(PromptTemplate).all()
+        return templates
+    except Exception as e:
+        print(f"DEBUG: 查询全局提示词模板时出错: {str(e)}")
+        print(f"DEBUG: 错误类型: {type(e).__name__}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"内部服务器错误: {str(e)}")
+
+@app.post("/api/prompt-templates", response_model=PromptTemplateResponse)
+def create_global_prompt_template(template: PromptTemplateCreate, db: Session = Depends(get_db)):
+    """创建新的提示模板（全局级别）"""
+    # 创建全局提示词模板，不设置project_id
+    db_template = PromptTemplate(**template.model_dump())
+    db.add(db_template)
+    db.commit()
+    db.refresh(db_template)
+    return db_template
+
+# 提示模板相关API - 项目级别（不再支持，因为PromptTemplate已移除project_id字段）
 @app.get("/api/projects/{project_id}/prompt-templates", response_model=List[PromptTemplateResponse])
 def get_prompt_templates(project_id: int, db: Session = Depends(get_db)):
-    """获取项目的所有提示模板"""
-    templates = db.query(PromptTemplate).filter(PromptTemplate.project_id == project_id).all()
+    """获取项目的所有提示模板（已弃用，返回所有全局提示词模板）"""
+    templates = db.query(PromptTemplate).all()
     return templates
 
 @app.post("/api/projects/{project_id}/prompt-templates", response_model=PromptTemplateResponse)
 def create_prompt_template(project_id: int, template: PromptTemplateCreate, db: Session = Depends(get_db)):
-    """创建新的提示模板"""
-    db_template = PromptTemplate(project_id=project_id, **template.dict())
+    """创建新的提示模板（已弃用，创建全局提示词模板）"""
+    db_template = PromptTemplate(**template.model_dump())
     db.add(db_template)
     db.commit()
     db.refresh(db_template)
@@ -344,7 +396,9 @@ def update_prompt_template(template_id: int, template: PromptTemplateCreate, db:
     if not db_template:
         raise HTTPException(status_code=404, detail="提示模板不存在")
 
-    for key, value in template.dict().items():
+    # 更新模板内容，不修改project_id
+    update_data = template.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
         setattr(db_template, key, value)
 
     db.commit()
@@ -596,6 +650,53 @@ def delete_dungeon(dungeon_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "副本已删除"}
 
+# Conversation History API
+@app.get("/api/conversations", response_model=List[ConversationResponse])
+def get_conversations_for_project(db: Session = Depends(get_db)):
+    """获取所有全局对话历史记录（不含消息内容）"""
+    conversations = db.query(Conversation).order_by(Conversation.created_at.desc()).all()
+    # 为了效率，我们不在此处返回完整的消息列表
+    for conv in conversations:
+        conv.messages = [] # 清空消息列表
+    return conversations
+
+@app.get("/api/conversations/{conversation_id}/messages", response_model=List[MessageResponse])
+def get_messages_for_conversation(conversation_id: int, db: Session = Depends(get_db)):
+    """获取特定对话的所有消息"""
+    messages = db.query(Message).filter(Message.conversation_id == conversation_id).order_by(Message.created_at.asc()).all()
+    if not messages:
+        # 即使对话存在但没有消息，也返回空列表，而不是404
+        # 但要检查对话是否存在
+        conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+        if not conversation:
+            raise HTTPException(status_code=404, detail="对话不存在")
+    return messages
+
+
+
+
+@app.delete("/api/conversations/{conversation_id}")
+def delete_conversation(conversation_id: int, db: Session = Depends(get_db)):
+    """删除特定对话及其所有消息"""
+    db_conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+    if not db_conversation:
+        raise HTTPException(status_code=404, detail="对话不存在")
+
+    db.delete(db_conversation)
+    db.commit()
+    return {"message": "对话已删除"}
+
+@app.put("/api/conversations/{conversation_id}", response_model=ConversationResponse)
+def update_conversation(conversation_id: int, conversation_update: ConversationUpdate, db: Session = Depends(get_db)):
+    """更新特定对话的标题"""
+    db_conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+    if not db_conversation:
+        raise HTTPException(status_code=404, detail="对话不存在")
+
+    db_conversation.title = conversation_update.title
+    db.commit()
+    db.refresh(db_conversation)
+    return db_conversation
 
 # 提示词渲染API
 @app.post("/api/prompts/render")
@@ -639,6 +740,172 @@ def render_prompt(payload: dict, db: Session = Depends(get_db)):
             content = content.replace(f"{{{{ {keyword} }}}}", found_content)
 
     return {"rendered_content": content}
+
+
+class ChatRequest(BaseModel):
+    message: str
+    project_id: Optional[int] = None
+    conversation_id: Optional[int] = None
+    history: List[dict] = []
+    prompt_template_id: Optional[int] = None
+    ai_model_id: Optional[int] = None
+
+@app.post("/api/chat")
+def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
+    conversation_id = request.conversation_id
+    system_prompt = None
+    selected_ai_model_identifier = "default_model"
+
+    if request.prompt_template_id:
+        prompt_template = db.query(PromptTemplate).filter(PromptTemplate.id == request.prompt_template_id).first()
+        if prompt_template:
+            system_prompt = prompt_template.content
+
+    if request.ai_model_id:
+        ai_model = db.query(AIModel).filter(AIModel.id == request.ai_model_id).first()
+        if ai_model:
+            selected_ai_model_identifier = ai_model.model_identifier
+
+    # 如果是新对话，则创建对话记录
+    if conversation_id is None:
+        if request.project_id is None:
+            raise HTTPException(status_code=400, detail="Project ID is required to start a new conversation.")
+        # 自动生成标题：取消息的前30个字符
+        title = request.message[:30] + '...' if len(request.message) > 30 else request.message
+        new_conv = Conversation(title=title, project_id=request.project_id)
+        db.add(new_conv)
+        db.commit()
+        db.refresh(new_conv)
+        conversation_id = new_conv.id
+
+    # 保存用户消息
+    user_message = Message(
+        conversation_id=conversation_id,
+        role='user',
+        content=request.message
+    )
+    db.add(user_message)
+    db.commit()
+
+    selected_ai_model = None
+    selected_ai_provider = None
+
+    if request.prompt_template_id:
+        prompt_template = db.query(PromptTemplate).filter(PromptTemplate.id == request.prompt_template_id).first()
+        if prompt_template:
+            system_prompt = prompt_template.content
+
+    if request.ai_model_id:
+        selected_ai_model = db.query(AIModel).filter(AIModel.id == request.ai_model_id).first()
+        if selected_ai_model:
+            selected_ai_model_identifier = selected_ai_model.model_identifier
+            selected_ai_provider = db.query(AIProvider).filter(AIProvider.id == selected_ai_model.provider_id).first()
+            if not selected_ai_provider:
+                raise HTTPException(status_code=404, detail="AI提供商不存在")
+
+    # 如果是新对话，则创建对话记录
+    if conversation_id is None:
+        if request.project_id is None:
+            raise HTTPException(status_code=400, detail="Project ID is required to start a new conversation.")
+        # 自动生成标题：取消息的前30个字符
+        title = request.message[:30] + '...' if len(request.message) > 30 else request.message
+        new_conv = Conversation(title=title, project_id=request.project_id)
+        db.add(new_conv)
+        db.commit()
+        db.refresh(new_conv)
+        conversation_id = new_conv.id
+
+    # 保存用户消息
+    user_message = Message(
+        conversation_id=conversation_id,
+        role='user',
+        content=request.message
+    )
+    db.add(user_message)
+    db.commit()
+
+    # ---- AI 调用逻辑 ----
+    ai_reply_content = "抱歉，AI服务暂不可用或配置不正确。"
+
+    if selected_ai_provider and selected_ai_model:
+        # 准备消息历史，包括系统提示
+        messages_for_ai = []
+        if system_prompt:
+            messages_for_ai.append({"role": "system", "content": system_prompt})
+        
+        # 添加历史消息
+        for msg in request.history:
+            messages_for_ai.append({"role": msg["role"], "content": msg["content"]})
+        
+        # 添加当前用户消息
+        messages_for_ai.append({"role": "user", "content": request.message})
+
+        # 动态选择AI客户端并调用
+        try:
+            if "openai" in selected_ai_provider.name.lower():
+                # 假设使用OpenAI兼容API
+                # 需要安装：pip install openai
+                from openai import OpenAI
+                client = OpenAI(
+                    api_key=selected_ai_provider.api_key,
+                    base_url=selected_ai_provider.base_url or "https://api.openai.com/v1",
+                )
+                chat_completion = client.chat.completions.create(
+                    model=selected_ai_model.model_identifier,
+                    messages=messages_for_ai,
+                    temperature=selected_ai_model.temperature,
+                    max_tokens=selected_ai_model.max_tokens,
+                )
+                ai_reply_content = chat_completion.choices[0].message.content
+            elif "gemini" in selected_ai_provider.name.lower():
+                # 假设使用Google Gemini API
+                # 需要安装：pip install google-generativeai
+                import google.generativeai as genai
+                genai.configure(api_key=selected_ai_provider.api_key)
+                model = genai.GenerativeModel(selected_ai_model.model_identifier)
+                # Gemini API的消息格式可能与OpenAI略有不同，这里需要适配
+                # 简单的适配：将system role转换为user/model role
+                gemini_messages = []
+                for msg in messages_for_ai:
+                    if msg["role"] == "system":
+                        gemini_messages.append({"role": "user", "parts": [msg["content"]]})
+                        gemini_messages.append({"role": "model", "parts": ["好的，我明白了。"]}) # 模拟AI确认系统指令
+                    elif msg["role"] == "user":
+                        gemini_messages.append({"role": "user", "parts": [msg["content"]]})
+                    elif msg["role"] == "ai": # 假设后端存储的ai role对应gemini的model role
+                        gemini_messages.append({"role": "model", "parts": [msg["content"]]})
+                
+                response = model.generate_content(
+                    gemini_messages,
+                    generation_config=genai.types.GenerationConfig(
+                        temperature=selected_ai_model.temperature,
+                        max_output_tokens=selected_ai_model.max_tokens,
+                    )
+                )
+                ai_reply_content = response.text
+            else:
+                ai_reply_content = f"不支持的AI提供商: {selected_ai_provider.name}。"
+        except Exception as e:
+            print(f"AI调用失败: {e}")
+            ai_reply_content = f"AI服务调用失败: {e}"
+    else:
+        ai_reply_content = f"已收到消息: '{request.message}'。使用模型: {selected_ai_model_identifier}。这是一个模拟回复。"
+        if system_prompt:
+            ai_reply_content = f"（系统提示：{system_prompt}）" + ai_reply_content
+
+    # ---------------------
+
+    # 保存AI消息
+    ai_message = Message(
+        conversation_id=conversation_id,
+        role='ai',
+        content=ai_reply_content
+    )
+    db.add(ai_message)
+    db.commit()
+
+    return {"reply": ai_reply_content, "conversation_id": conversation_id}
+
 
 
 

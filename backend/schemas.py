@@ -1,5 +1,5 @@
-from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
+from pydantic import BaseModel, EmailStr
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 # 基础模式
@@ -38,7 +38,7 @@ class VolumeCreate(VolumeBase):
 
 class VolumeResponse(VolumeBase):
     id: int
-    project_id: int
+    project_id: Optional[int] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -55,7 +55,7 @@ class ChapterCreate(ChapterBase):
 
 class ChapterResponse(ChapterBase):
     id: int
-    project_id: int
+    project_id: Optional[int] = None
     volume_id: Optional[int] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -95,7 +95,7 @@ class AIProviderUpdate(AIProviderBase):
 
 class AIProviderResponse(AIProviderBase):
     id: int
-    project_id: int
+    project_id: Optional[int] = None
     is_system: bool
     models: List[AIModelResponse] = []
 
@@ -113,7 +113,7 @@ class PromptTemplateCreate(PromptTemplateBase):
 
 class PromptTemplateResponse(PromptTemplateBase):
     id: int
-    project_id: int
+    project_id: Optional[int] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -127,7 +127,7 @@ class WorldviewCreate(WorldviewBase):
 
 class WorldviewResponse(WorldviewBase):
     id: int
-    project_id: int
+    project_id: Optional[int] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -141,7 +141,7 @@ class RPGCharacterCreate(RPGCharacterBase):
 
 class RPGCharacterResponse(RPGCharacterBase):
     id: int
-    project_id: int
+    project_id: Optional[int] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -155,7 +155,7 @@ class OrganizationCreate(OrganizationBase):
 
 class OrganizationResponse(OrganizationBase):
     id: int
-    project_id: int
+    project_id: Optional[int] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -169,7 +169,7 @@ class SupernaturalPowerCreate(SupernaturalPowerBase):
 
 class SupernaturalPowerResponse(SupernaturalPowerBase):
     id: int
-    project_id: int
+    project_id: Optional[int] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -183,7 +183,7 @@ class WeaponCreate(WeaponBase):
 
 class WeaponResponse(WeaponBase):
     id: int
-    project_id: int
+    project_id: Optional[int] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -197,7 +197,44 @@ class DungeonCreate(DungeonBase):
 
 class DungeonResponse(DungeonBase):
     id: int
-    project_id: int
+    project_id: Optional[int] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
+
+
+class ConversationUpdate(BaseModel):
+    title: str
+
+# Schemas for Message
+class MessageBase(BaseModel):
+    role: str
+    content: str
+
+class MessageCreate(MessageBase):
+    pass
+
+class MessageResponse(MessageBase):
+    id: int
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
+# Schemas for Conversation
+class ConversationBase(BaseModel):
+    title: str
+
+class ConversationCreate(ConversationBase):
+    project_id: Optional[int] = None
+
+class ConversationResponse(ConversationBase):
+    id: int
+    project_id: Optional[int]
+    created_at: datetime
+    messages: List[MessageResponse] = []
+
+    class Config:
+        orm_mode = True
+
+
 

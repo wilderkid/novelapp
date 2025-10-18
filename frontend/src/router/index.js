@@ -37,6 +37,11 @@ const router = createRouter({
       path: '/ai-management',
       name: 'ai-management',
       component: () => import('@/views/AIManagerView.vue')
+    },
+    {
+      path: '/chat',
+      name: 'chat',
+      component: () => import('@/views/ChatView.vue')
     }
   ]
 })

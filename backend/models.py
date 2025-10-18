@@ -1,7 +1,16 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, JSON, Boolean, Float
+from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, DateTime, Boolean, Float, JSON
+from datetime import datetime
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from database import Base
+from sqlalchemy.ext.declarative import declarative_base
+Base = declarative_base()
+
+from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, DateTime, Boolean, Float, JSON
+from datetime import datetime
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
+from sqlalchemy.ext.declarative import declarative_base
+Base = declarative_base()
 
 class Project(Base):
     __tablename__ = "projects"
@@ -18,14 +27,15 @@ class Project(Base):
     # 关系
 
     volumes = relationship("Volume", back_populates="project")
-    chapters = relationship("Chapter", back_populates="project")
+    chapters = relationship("Chapter", back_populates="project", cascade="all, delete-orphan")
+    conversations = relationship("Conversation", back_populates="project", cascade="all, delete-orphan")
     worldviews = relationship("Worldview", back_populates="project")
     rpg_characters = relationship("RPGCharacter", back_populates="project")
     organizations = relationship("Organization", back_populates="project")
     supernatural_powers = relationship("SupernaturalPower", back_populates="project")
     weapons = relationship("Weapon", back_populates="project")
     dungeons = relationship("Dungeon", back_populates="project")
-    prompt_templates = relationship("PromptTemplate", back_populates="project")
+    # prompt_templates = relationship("PromptTemplate", back_populates="project")  # 移除与项目的关系
     ai_providers = relationship("AIProvider", back_populates="project")
 
 
@@ -68,7 +78,7 @@ class AIProvider(Base):
     __tablename__ = "ai_providers"
 
     id = Column(Integer, primary_key=True, index=True)
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=True)  # 改为可选，支持全局和项目级别
     name = Column(String, nullable=False)  # 例如: "OpenAI", "Gemini"
     api_key = Column(String)
     base_url = Column(String)
@@ -101,7 +111,6 @@ class PromptTemplate(Base):
     __tablename__ = "prompt_templates"
 
     id = Column(Integer, primary_key=True, index=True)
-    project_id = Column(Integer, ForeignKey("projects.id"))
     name = Column(String(255), nullable=False)
     category = Column(String(100))
     content = Column(Text, nullable=False)
@@ -110,7 +119,7 @@ class PromptTemplate(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
-    project = relationship("Project", back_populates="prompt_templates")
+    # project = relationship("Project", back_populates="prompt_templates")  # 移除与项目的关系
 
 
 class Worldview(Base):
@@ -173,13 +182,30 @@ class Weapon(Base):
     project = relationship("Project", back_populates="weapons")
 
 class Dungeon(Base):
-    __tablename__ = "dungeons"
-
-    id = Column(Integer, primary_key=True, index=True)
-    project_id = Column(Integer, ForeignKey("projects.id"))
+    __tablename__ = 'dungeons'
+    id = Column(Integer, primary_key=True)
+    project_id = Column(Integer, ForeignKey('projects.id'), nullable=False)
     name = Column(String, nullable=False)
-    content = Column(Text)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    description = Column(Text)
+    project = relationship("Project")
 
-    project = relationship("Project", back_populates="dungeons")
+
+class Conversation(Base):
+    __tablename__ = 'conversations'
+    id = Column(Integer, primary_key=True)
+    project_id = Column(Integer, ForeignKey('projects.id', ondelete='CASCADE'), nullable=False)
+    title = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    project = relationship("Project", back_populates="conversations")
+    messages = relationship("Message", back_populates="conversation", cascade="all, delete-orphan")
+
+class Message(Base):
+    __tablename__ = 'messages'
+    id = Column(Integer, primary_key=True)
+    conversation_id = Column(Integer, ForeignKey('conversations.id', ondelete='CASCADE'), nullable=False)
+    role = Column(String, nullable=False)  # 'user' or 'ai'
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    conversation = relationship("Conversation", back_populates="messages")

@@ -16,6 +16,8 @@
     "@element-plus/icons-vue": "^2.1.0",
     "axios": "^1.4.0",
     "element-plus": "^2.3.9",
+    "highlight.js": "^11.11.1",
+    "marked": "^16.4.1",
     "pinia": "^2.1.6",
     "sortablejs": "^1.15.6",
     "vue": "^3.3.4",

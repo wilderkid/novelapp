@@ -33,6 +33,10 @@
                   <el-icon><Cpu /></el-icon>
                   <template #title><span>AI 管理</span></template>
                 </el-menu-item>
+                <el-menu-item index="7">
+                  <el-icon><ChatDotRound /></el-icon>
+                  <template #title><span>AI 对话</span></template>
+                </el-menu-item>
               </el-menu>
               <div class="sidebar-toggle" @click="toggleSidebar">
                 <el-icon>
@@ -88,7 +92,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Document, Setting, Close, MagicStick, Reading, Collection, Fold, Expand, Cpu } from '@element-plus/icons-vue'
+import { Document, Setting, Close, MagicStick, Reading, Collection, Fold, Expand, Cpu, ChatDotRound } from '@element-plus/icons-vue'
 import axios from 'axios';
 import { useProjectStore } from './stores/projectStore';
 
@@ -133,6 +137,9 @@ const handleMenuSelect = (index) => {
       break
     case '6':
       router.push('/ai-management')
+      break
+    case '7':
+      router.push('/chat')
       break
   }
 }

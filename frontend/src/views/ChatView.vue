@@ -38,36 +38,70 @@
       </div>
       <div class="chat-messages" ref="messagesContainer">
         <div v-for="(msg, index) in messages" :key="index" class="message-wrapper" :class="`message-wrapper-${msg.role}`">
-          <div class="message" :class="`message-${msg.role}`">
-            <div v-if="msg.role === 'ai'" v-html="renderMarkdown(msg.content)" class="markdown-body"></div>
-            <span v-else>{{ msg.content }}</span>
+          <!-- 添加头像 -->
+          <div class="avatar" :class="`avatar-${msg.role}`">
+            <svg v-if="msg.role === 'assistant'" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" fill="#4a6cf7"/>
+            </svg>
+            <svg v-else viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" fill="#10b981"/>
+            </svg>
           </div>
-          <div v-if="msg.role === 'ai' && !isLoading" class="message-actions">
-            <el-button size="small" circle :icon="CopyDocument" @click="copyMessage(msg.content)"></el-button>
-            <el-button size="small" circle :icon="Refresh" @click="regenerateResponse(index)"></el-button>
+          <div class="message" :class="`message-${msg.role}`">
+            <div v-if="msg.role === 'assistant'" v-html="renderMarkdown(msg.content)" class="markdown-body"></div>
+            <span v-else>{{ msg.content }}</span>
+            <div v-if="msg.role === 'assistant' && !isLoading" class="message-actions">
+              <el-button size="small" circle :icon="CopyDocument" @click="copyMessage(msg.content)"></el-button>
+              <el-button size="small" circle :icon="Refresh" @click="regenerateResponse(index)"></el-button>
+            </div>
           </div>
         </div>
       </div>
       <div class="chat-input-area">
-        <div class="prompt-template-selector">
-          <el-select v-model="selectedPromptTemplateId" placeholder="选择自定义指令 (可选)" clearable>
-            <el-option
-              v-for="item in promptTemplates"
-              :key="item.id"
-              :label="item.name"
-              :value="item.id">
-            </el-option>
-          </el-select>
-        </div>
-        <div class="ai-model-selector">
-          <el-select v-model="selectedAiModelId" placeholder="选择AI模型 (可选)" clearable>
-            <el-option
-              v-for="item in aiModels"
-              :key="item.id"
-              :label="item.name"
-              :value="item.id">
-            </el-option>
-          </el-select>
+        <div class="input-controls">
+          <!-- 提示词选择器 -->
+          <div class="control-item">
+            <el-dropdown trigger="click" v-model:show="showPromptTemplateMenu" @command="selectPromptTemplate">
+              <el-button :icon="ChatDotRound" circle />
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="">无提示词</el-dropdown-item>
+                  <el-dropdown-item 
+                    v-for="item in promptTemplates" 
+                    :key="item.id" 
+                    :command="item.id"
+                    :class="{ 'is-active': selectedPromptTemplateId === item.id }">
+                    {{ item.name }}
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+            <span class="control-label" v-if="selectedPromptTemplateId">
+              {{ getPromptTemplateName(selectedPromptTemplateId) }}
+            </span>
+          </div>
+
+          <!-- AI模型选择器 -->
+          <div class="control-item">
+            <el-dropdown trigger="click" v-model:show="showAiModelMenu" @command="selectAiModel">
+              <el-button :icon="Setting" circle />
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="">默认模型</el-dropdown-item>
+                  <el-dropdown-item 
+                    v-for="item in aiModels" 
+                    :key="item.id" 
+                    :command="item.id"
+                    :class="{ 'is-active': selectedAiModelId === item.id }">
+                    {{ item.name }}
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+            <span class="control-label" v-if="selectedAiModelId">
+              {{ getAiModelName(selectedAiModelId) }}
+            </span>
+          </div>
         </div>
         <el-input
           v-model="userInput"
@@ -92,8 +126,10 @@ import axios from 'axios';
 import { marked } from 'marked';
 import hljs from 'highlight.js';
 import 'highlight.js/styles/default.css';
-import { CopyDocument, Refresh, Edit, Delete } from '@element-plus/icons-vue';
+import { CopyDocument, Refresh, Edit, Delete, ChatDotRound, Setting } from '@element-plus/icons-vue';
+import { useProjectStore } from '@/stores/projectStore';
 
+const projectStore = useProjectStore();
 const userInput = ref('');
 const messages = ref([]);
 const conversations = ref([]);
@@ -104,6 +140,10 @@ const promptTemplates = ref([]);
 const selectedPromptTemplateId = ref(null);
 const aiModels = ref([]);
 const selectedAiModelId = ref(null);
+
+// 下拉菜单状态
+const showPromptTemplateMenu = ref(false);
+const showAiModelMenu = ref(false);
 
 // -- Conversation Actions --
 const deleteConversation = async (convId) => {
@@ -199,8 +239,8 @@ const regenerateResponse = async (aiMessageIndex) => {
   // 从界面上移除旧的AI回复
   messages.value.splice(aiMessageIndex, 1);
   
-  // 复用sendMessage逻辑，但传入历史消息
-  await sendMessage(userMessageContent);
+  // 复用sendMessageStream逻辑，但传入历史消息
+  await sendMessageStream(userMessageContent);
 };
 
 
@@ -210,6 +250,30 @@ const scrollToBottom = () => {
       messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
     }
   });
+};
+
+// 处理提示词选择
+const selectPromptTemplate = (templateId) => {
+  selectedPromptTemplateId.value = templateId;
+  showPromptTemplateMenu.value = false;
+};
+
+// 处理AI模型选择
+const selectAiModel = (modelId) => {
+  selectedAiModelId.value = modelId;
+  showAiModelMenu.value = false;
+};
+
+// 获取提示词名称
+const getPromptTemplateName = (templateId) => {
+  const template = promptTemplates.value.find(t => t.id === templateId);
+  return template ? template.name : '';
+};
+
+// 获取AI模型名称
+const getAiModelName = (modelId) => {
+  const model = aiModels.value.find(m => m.id === modelId);
+  return model ? model.name : '';
 };
 
 const fetchConversations = async () => {
@@ -234,9 +298,8 @@ const fetchPromptTemplates = async () => {
 
 const fetchAiModels = async () => {
   try {
-    // Assuming a project_id of 1 for now, as multi-tenancy is removed.
-    // In a real app, this would be dynamic.
-    const response = await axios.get(`http://localhost:9009/api/ai-providers/1/ai-models`);
+    // Get all AI models in one call
+    const response = await axios.get(`http://localhost:9009/api/ai-models`);
     aiModels.value = response.data;
   } catch (error) {
     console.error('Failed to fetch AI models:', error);
@@ -253,7 +316,7 @@ onMounted(() => {
 
 const startNewChat = () => {
   currentConversationId.value = null;
-  messages.value = [{ role: 'ai', content: '你好！有什么可以帮助你的吗？' }];
+  messages.value = [{ role: 'assistant', content: '你好！有什么可以帮助你的吗？' }];
   userInput.value = '';
   selectedPromptTemplateId.value = null; // Clear selected prompt on new chat
   selectedAiModelId.value = null; // Clear selected AI model on new chat
@@ -290,19 +353,57 @@ const sendMessage = async (messageContent = null) => {
   
   scrollToBottom();
 
-  messages.value.push({ role: 'ai', content: '正在思考中...' });
+  messages.value.push({ role: 'assistant', content: '正在思考中...' });
   scrollToBottom();
 
   try {
+    // Build history excluding the current "正在思考中..." AI message
+    const actualHistory = [...messages.value]; // Create a copy
+    actualHistory.pop(); // Remove the last "正在思考中..." AI message
+    actualHistory.pop(); // Remove the current user message that's being sent
+    
+    // 添加详细的调用日志
+    console.log("=" * 80);
+    console.log("【前端AI调用详细日志】");
+    console.log("调用时间:", new Date());
+    console.log("消息内容:", content);
+    console.log("对话ID:", currentConversationId.value);
+    console.log("历史消息数量:", actualHistory.length);
+    console.log("提示模板ID:", selectedPromptTemplateId.value);
+    console.log("AI模型ID:", selectedAiModelId.value);
+
+    // 准备资源数据，用于替换提示词中的变量
+    const resources = {};
+
+    // 如果有选中的提示词模板，尝试解析其中的变量
+    if (selectedPromptTemplateId.value) {
+      // 这里可以添加逻辑来收集用户输入的变量值
+      // 例如，可以弹出一个对话框让用户输入每个变量的值
+      // 不再使用硬编码数据，让后端从数据库中获取
+    }
+
     const payload = {
       message: content,
+      // AI对话功能不依赖project_id，移除此参数
       conversation_id: currentConversationId.value,
-      history: messages.value.slice(0, -2).map(m => ({ role: m.role, content: m.content })),
+      history: actualHistory.map(m => ({ role: m.role, content: m.content })),
       prompt_template_id: selectedPromptTemplateId.value,
       ai_model_id: selectedAiModelId.value,
+      resources: resources,
     };
 
+    console.log("请求载荷:", payload);
+    console.log("=" * 80);
+
     const response = await axios.post('http://localhost:9009/api/chat', payload);
+
+    // 添加响应日志
+    console.log("=" * 80);
+    console.log("【前端AI响应详细日志】");
+    console.log("响应时间:", new Date());
+    console.log("响应状态:", response.status);
+    console.log("响应数据:", response.data);
+    console.log("=" * 80);
 
     messages.value[messages.value.length - 1].content = response.data.reply;
 
@@ -315,8 +416,152 @@ const sendMessage = async (messageContent = null) => {
     console.error('AI request failed:', error);
     messages.value[messages.value.length - 1].content = '抱歉，与AI连接时出现错误。';
     ElMessage.error('AI响应失败');
+    
+    // If there's a validation error (400), show more specific error
+    if (error.response && error.response.status === 400) {
+      console.error('Validation Error:', error.response.data);
+      
+      // Check if it's specifically a project ID error
+      if (error.response.data.detail && error.response.data.detail.includes('Project ID')) {
+        ElMessage.error('请先选择一个项目');
+      }
+    }
   }
   finally {
+    isLoading.value = false;
+    scrollToBottom();
+  }
+};
+
+// 使用流式API发送消息
+const sendMessageStream = async (messageContent = null) => {
+  const content = messageContent || userInput.value;
+  if (!content.trim()) {
+    ElMessage.warning('消息不能为空');
+    return;
+  }
+  if (isLoading.value) return;
+
+  isLoading.value = true;
+
+  // 如果是新消息（非重新生成），则添加到消息列表
+  if (!messageContent) {
+    messages.value.push({ role: 'user', content });
+    userInput.value = '';
+  }
+
+  scrollToBottom();
+
+  messages.value.push({ role: 'assistant', content: '正在思考中...' });
+  scrollToBottom();
+
+  try {
+    // Build history excluding the current "正在思考中..." AI message
+    const actualHistory = [...messages.value]; // Create a copy
+    actualHistory.pop(); // Remove the last "正在思考中..." AI message
+    actualHistory.pop(); // Remove the current user message that's being sent
+
+    // 准备资源数据，用于替换提示词中的变量
+    const resources = {};
+
+    // 如果有选中的提示词模板，尝试解析其中的变量
+    if (selectedPromptTemplateId.value) {
+      // 这里可以添加逻辑来收集用户输入的变量值
+      // 例如，可以弹出一个对话框让用户输入每个变量的值
+      // 不再使用硬编码数据，让后端从数据库中获取
+    }
+
+    // 准备请求参数
+    const payload = {
+      message: content,
+      conversation_id: currentConversationId.value,
+      history: actualHistory.map(m => ({ role: m.role, content: m.content })),
+      prompt_template_id: selectedPromptTemplateId.value,
+      ai_model_id: selectedAiModelId.value,
+      resources: resources,
+    };
+
+    // 使用fetch API进行流式请求
+    const response = await fetch('http://localhost:9009/api/chat/stream', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    // 当前AI消息的索引
+    const aiMessageIndex = messages.value.length - 1;
+    let aiContent = '';
+
+    // 获取响应流
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+
+    // 处理流式数据
+    while (true) {
+      const { done, value } = await reader.read();
+
+      if (done) {
+        break;
+      }
+
+      // 解码数据块
+      const chunk = decoder.decode(value, { stream: true });
+
+      // 处理SSE格式的数据
+      const lines = chunk.split('\n');
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.substring(6));
+
+            switch (data.type) {
+              case 'conversation_id':
+                if (!currentConversationId.value) {
+                  currentConversationId.value = data.conversation_id;
+                  fetchConversations();
+                }
+                break;
+
+              case 'content':
+                // 第一次接收到内容时，替换"正在思考中..."
+                if (aiContent === '') {
+                  messages.value[aiMessageIndex].content = data.content;
+                } else {
+                  // 追加内容
+                  messages.value[aiMessageIndex].content += data.content;
+                }
+                aiContent += data.content;
+                scrollToBottom();
+                break;
+
+              case 'error':
+                messages.value[aiMessageIndex].content = data.message;
+                ElMessage.error('AI响应失败');
+                break;
+
+              case 'done':
+                // 流式响应结束
+                break;
+            }
+          } catch (e) {
+            console.error('解析SSE数据失败:', e);
+          }
+        }
+      }
+    }
+
+  } catch (error) {
+    console.error('AI request failed:', error);
+    messages.value[messages.value.length - 1].content = '抱歉，与AI连接时出现错误。';
+    ElMessage.error('AI响应失败');
+  } finally {
     isLoading.value = false;
     scrollToBottom();
   }
@@ -326,7 +571,8 @@ const handleEnter = (e) => {
   if (e.shiftKey) {
     return;
   }
-  sendMessage();
+  // 使用流式API发送消息
+  sendMessageStream();
 };
 </script>
 
@@ -447,28 +693,54 @@ const handleEnter = (e) => {
 .message-wrapper {
   margin-bottom: 1rem;
   display: flex;
-  flex-direction: column;
-}
-
-.message-wrapper-user {
-  align-items: flex-end;
-}
-
-.message-wrapper-ai {
+  flex-direction: row;
   align-items: flex-start;
 }
 
-.message {
-  max-width: 90%;
-  line-height: 1.6;
-}
-
-.message-user .message {
+.message-wrapper-user {
   justify-content: flex-end;
 }
 
-.message-ai .message {
+.message-wrapper-ai {
   justify-content: flex-start;
+}
+
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 8px;
+  flex-shrink: 0;
+}
+
+.avatar svg {
+  width: 24px;
+  height: 24px;
+}
+
+.avatar-user {
+  order: 2; /* 用户头像在右侧 */
+}
+
+.avatar-ai {
+  order: 1; /* AI头像在左侧 */
+}
+
+.message {
+  max-width: 70%;
+  line-height: 1.6;
+  position: relative;
+}
+
+.message-user {
+  order: 1; /* 用户消息在左侧 */
+}
+
+.message-ai {
+  order: 2; /* AI消息在右侧 */
 }
 
 .message span, .markdown-body {
@@ -490,10 +762,47 @@ const handleEnter = (e) => {
 }
 
 .message-actions {
-  margin-top: 8px;
-  margin-left: 10px;
+  position: absolute;
+  right: -40px;
+  top: 8px;
   display: flex;
+  flex-direction: column;
   gap: 8px;
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+}
+
+.message:hover .message-actions {
+  opacity: 1;
+}
+
+/* 新的控制按钮样式 */
+.input-controls {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+  align-items: center;
+}
+
+.control-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.control-label {
+  font-size: 14px;
+  color: #606266;
+  max-width: 150px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 下拉菜单激活状态 */
+.el-dropdown-menu__item.is-active {
+  color: #409eff;
+  font-weight: bold;
 }
 
 .chat-input-area {

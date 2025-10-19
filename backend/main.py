@@ -2,7 +2,7 @@
 from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session, joinedload
 import uvicorn
 import os
@@ -249,9 +249,7 @@ def delete_chapter(chapter_id: int, db: Session = Depends(get_db)):
 @app.get("/api/ai-providers", response_model=List[AIProviderResponse])
 def get_global_ai_providers(db: Session = Depends(get_db)):
     """获取所有AI提供商（全局级别）"""
-    providers = db.query(AIProvider).filter(
-        (AIProvider.project_id == None) | (AIProvider.is_system == True)
-    ).all()
+    providers = db.query(AIProvider).all()
     return providers
 
 @app.post("/api/ai-providers", response_model=AIProviderResponse)
@@ -264,16 +262,16 @@ def create_global_ai_provider(provider: AIProviderCreate, db: Session = Depends(
     return db_provider
 
 # AI 提供商相关 API - 项目级别（保持原有功能）
-@app.get("/api/projects/{project_id}/ai-providers", response_model=List[AIProviderResponse])
-def get_ai_providers(project_id: int, db: Session = Depends(get_db)):
-    """获取项目的所有AI提供商"""
-    providers = db.query(AIProvider).filter(AIProvider.project_id == project_id).all()
+@app.get("/api/ai-providers", response_model=List[AIProviderResponse])
+def get_ai_providers(db: Session = Depends(get_db)):
+    """获取所有AI提供商"""
+    providers = db.query(AIProvider).all()
     return providers
 
-@app.post("/api/projects/{project_id}/ai-providers", response_model=AIProviderResponse)
-def create_ai_provider(project_id: int, provider: AIProviderCreate, db: Session = Depends(get_db)):
-    """为项目创建新的AI提供商"""
-    db_provider = AIProvider(**provider.model_dump(), project_id=project_id)
+@app.post("/api/ai-providers", response_model=AIProviderResponse)
+def create_ai_provider(provider: AIProviderCreate, db: Session = Depends(get_db)):
+    """创建新的AI提供商"""
+    db_provider = AIProvider(**provider.model_dump())
     db.add(db_provider)
     db.commit()
     db.refresh(db_provider)
@@ -346,6 +344,14 @@ def delete_ai_model(model_id: int, db: Session = Depends(get_db)):
     db.delete(db_model)
     db.commit()
     return {"message": "AI模型已删除"}
+
+# 获取所有AI模型（包括其提供商信息）- 全局级别
+@app.get("/api/ai-models", response_model=List[AIModelResponse])
+def get_all_ai_models(db: Session = Depends(get_db)):
+    """获取所有AI模型（包括其提供商信息）"""
+    # Get all models from all providers
+    models = db.query(AIModel).join(AIProvider).all()
+    return models
 
 
 # 提示模板相关API - 全局级别
@@ -705,8 +711,10 @@ def render_prompt(payload: dict, db: Session = Depends(get_db)):
     content = payload.get("content", "")
     project_id = payload.get("project_id")
 
+    # 如果没有提供项目ID，直接返回原始内容，不进行渲染
+    # AI功能是全局的，渲染可能用于特定项目上下文，但不是必需的
     if not project_id:
-        raise HTTPException(status_code=400, detail="Project ID is required")
+        return {"rendered_content": content}
 
     keywords = re.findall(r"\{\{\s*(.*?)\s*\}\}", content)
     if not keywords:
@@ -744,56 +752,31 @@ def render_prompt(payload: dict, db: Session = Depends(get_db)):
 
 class ChatRequest(BaseModel):
     message: str
-    project_id: Optional[int] = None
+    # 移除project_id参数，AI对话功能不依赖项目
     conversation_id: Optional[int] = None
     history: List[dict] = []
     prompt_template_id: Optional[int] = None
     ai_model_id: Optional[int] = None
+    # 添加resources字段，用于传递提示词中需要的变量值
+    resources: Optional[dict] = None
 
 @app.post("/api/chat")
 def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
+    """原有的非流式AI对话API，保持向后兼容"""
     conversation_id = request.conversation_id
     system_prompt = None
     selected_ai_model_identifier = "default_model"
 
-    if request.prompt_template_id:
-        prompt_template = db.query(PromptTemplate).filter(PromptTemplate.id == request.prompt_template_id).first()
-        if prompt_template:
-            system_prompt = prompt_template.content
-
-    if request.ai_model_id:
-        ai_model = db.query(AIModel).filter(AIModel.id == request.ai_model_id).first()
-        if ai_model:
-            selected_ai_model_identifier = ai_model.model_identifier
-
-    # 如果是新对话，则创建对话记录
-    if conversation_id is None:
-        if request.project_id is None:
-            raise HTTPException(status_code=400, detail="Project ID is required to start a new conversation.")
-        # 自动生成标题：取消息的前30个字符
-        title = request.message[:30] + '...' if len(request.message) > 30 else request.message
-        new_conv = Conversation(title=title, project_id=request.project_id)
-        db.add(new_conv)
-        db.commit()
-        db.refresh(new_conv)
-        conversation_id = new_conv.id
-
-    # 保存用户消息
-    user_message = Message(
-        conversation_id=conversation_id,
-        role='user',
-        content=request.message
-    )
-    db.add(user_message)
-    db.commit()
-
+    # 获取AI模型和提供商信息
     selected_ai_model = None
     selected_ai_provider = None
 
     if request.prompt_template_id:
         prompt_template = db.query(PromptTemplate).filter(PromptTemplate.id == request.prompt_template_id).first()
         if prompt_template:
-            system_prompt = prompt_template.content
+            # 使用新的提示词处理函数
+            from prompt_utils import process_prompt_template
+            system_prompt = process_prompt_template(db, prompt_template, request.resources)
 
     if request.ai_model_id:
         selected_ai_model = db.query(AIModel).filter(AIModel.id == request.ai_model_id).first()
@@ -805,11 +788,10 @@ def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
 
     # 如果是新对话，则创建对话记录
     if conversation_id is None:
-        if request.project_id is None:
-            raise HTTPException(status_code=400, detail="Project ID is required to start a new conversation.")
         # 自动生成标题：取消息的前30个字符
         title = request.message[:30] + '...' if len(request.message) > 30 else request.message
-        new_conv = Conversation(title=title, project_id=request.project_id)
+        # AI对话功能不依赖项目，不设置project_id
+        new_conv = Conversation(title=title)
         db.add(new_conv)
         db.commit()
         db.refresh(new_conv)
@@ -828,77 +810,456 @@ def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
     ai_reply_content = "抱歉，AI服务暂不可用或配置不正确。"
 
     if selected_ai_provider and selected_ai_model:
-        # 准备消息历史，包括系统提示
-        messages_for_ai = []
-        if system_prompt:
-            messages_for_ai.append({"role": "system", "content": system_prompt})
-        
-        # 添加历史消息
-        for msg in request.history:
-            messages_for_ai.append({"role": msg["role"], "content": msg["content"]})
-        
-        # 添加当前用户消息
-        messages_for_ai.append({"role": "user", "content": request.message})
+        # Check if API key is provided
+        if not selected_ai_provider.api_key or selected_ai_provider.api_key.strip() == "":
+            ai_reply_content = f"AI提供商的API密钥未设置。请在AI管理中配置API密钥。"
+        else:
+            # 准备消息历史，包括系统提示
+            messages_for_ai = []
+            if system_prompt:
+                messages_for_ai.append({"role": "system", "content": system_prompt})
+                # 输出最终使用的提示词
+                print("="*50)
+                print("最终使用的提示词:")
+                print(system_prompt)
+                print("="*50)
 
-        # 动态选择AI客户端并调用
-        try:
-            if "openai" in selected_ai_provider.name.lower():
-                # 假设使用OpenAI兼容API
-                # 需要安装：pip install openai
-                from openai import OpenAI
-                client = OpenAI(
-                    api_key=selected_ai_provider.api_key,
-                    base_url=selected_ai_provider.base_url or "https://api.openai.com/v1",
-                )
-                chat_completion = client.chat.completions.create(
-                    model=selected_ai_model.model_identifier,
-                    messages=messages_for_ai,
-                    temperature=selected_ai_model.temperature,
-                    max_tokens=selected_ai_model.max_tokens,
-                )
-                ai_reply_content = chat_completion.choices[0].message.content
-            elif "gemini" in selected_ai_provider.name.lower():
-                # 假设使用Google Gemini API
-                # 需要安装：pip install google-generativeai
-                import google.generativeai as genai
-                genai.configure(api_key=selected_ai_provider.api_key)
-                model = genai.GenerativeModel(selected_ai_model.model_identifier)
-                # Gemini API的消息格式可能与OpenAI略有不同，这里需要适配
-                # 简单的适配：将system role转换为user/model role
-                gemini_messages = []
-                for msg in messages_for_ai:
-                    if msg["role"] == "system":
-                        gemini_messages.append({"role": "user", "parts": [msg["content"]]})
-                        gemini_messages.append({"role": "model", "parts": ["好的，我明白了。"]}) # 模拟AI确认系统指令
-                    elif msg["role"] == "user":
-                        gemini_messages.append({"role": "user", "parts": [msg["content"]]})
-                    elif msg["role"] == "ai": # 假设后端存储的ai role对应gemini的model role
-                        gemini_messages.append({"role": "model", "parts": [msg["content"]]})
-                
-                response = model.generate_content(
-                    gemini_messages,
-                    generation_config=genai.types.GenerationConfig(
-                        temperature=selected_ai_model.temperature,
-                        max_output_tokens=selected_ai_model.max_tokens,
+            # 添加历史消息
+            for msg in request.history:
+                messages_for_ai.append({"role": msg["role"], "content": msg["content"]})
+
+            # 添加当前用户消息
+            messages_for_ai.append({"role": "user", "content": request.message})
+
+            # 动态选择AI客户端并调用 - 使用HTTP请求调用配置的AI服务
+            print(f"Debug: Attempting to call AI provider: {selected_ai_provider.name}")
+            print(f"Debug: Using model: {selected_ai_model.model_identifier}")
+            print(f"Debug: API key is set: {bool(selected_ai_provider.api_key)}")
+            print(f"Debug: Base URL: {selected_ai_provider.base_url}")
+
+            try:
+                # Default to OpenAI-compatible API if no base_url is provided
+                base_url = selected_ai_provider.base_url or "https://api.openai.com/v1"
+                api_key = selected_ai_provider.api_key
+
+                if not api_key:
+                    ai_reply_content = "AI提供商的API密钥未设置。请在AI管理中配置API密钥。"
+                else:
+                    # Prepare headers for the API call
+                    headers = {
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {api_key}"
+                    }
+
+                    # Prepare the payload for the AI API call
+                    payload = {
+                        "model": selected_ai_model.model_identifier,
+                        "messages": messages_for_ai,
+                        "temperature": selected_ai_model.temperature,
+                        "max_tokens": selected_ai_model.max_tokens,
+                    }
+
+                    # Determine the correct endpoint URL
+                    # For most OpenAI-compatible APIs, it's chat/completions
+                    api_endpoint = f"{base_url.rstrip('/')}/chat/completions"
+
+                    # 添加详细的调用日志
+                    import datetime
+                    import json
+                    print("=" * 80)
+                    print("【AI调用详细日志】")
+                    print(f"调用时间: {datetime.datetime.now()}")
+                    print(f"提供商名称: {selected_ai_provider.name}")
+                    print(f"API基础URL: {base_url}")
+                    print(f"API端点: {api_endpoint}")
+                    print(f"模型名称: {selected_ai_model.name}")
+                    print(f"模型标识符: {selected_ai_model.model_identifier}")
+                    print(f"API密钥: {api_key[:10]}..." if len(api_key) > 10 else f"API密钥: {api_key}")
+                    print(f"温度参数: {selected_ai_model.temperature}")
+                    print(f"最大Token数: {selected_ai_model.max_tokens}")
+                    print("请求载荷:")
+                    print(json.dumps(payload, indent=2, ensure_ascii=False))
+                    print("=" * 80)
+
+                    # Make the HTTP request to the AI provider
+                    import requests
+                    response = requests.post(
+                        api_endpoint,
+                        json=payload,
+                        headers=headers,
+                        timeout=30.0  # 30 second timeout
                     )
-                )
-                ai_reply_content = response.text
-            else:
-                ai_reply_content = f"不支持的AI提供商: {selected_ai_provider.name}。"
-        except Exception as e:
-            print(f"AI调用失败: {e}")
-            ai_reply_content = f"AI服务调用失败: {e}"
+
+                    print(f"响应状态码: {response.status_code}")
+
+                    if response.status_code == 200:
+                        response_data = response.json()
+                        ai_reply_content = response_data['choices'][0]['message']['content']
+                        print("响应内容:")
+                        print(json.dumps(response_data, indent=2, ensure_ascii=False))
+                    elif response.status_code == 401:
+                        ai_reply_content = f"API密钥无效或已过期。错误代码: {response.status_code}"
+                        print(f"错误详情: {response.text}")
+                    elif response.status_code == 404:
+                        ai_reply_content = f"API端点未找到。请检查API URL是否正确。错误代码: {response.status_code}"
+                        print(f"错误详情: {response.text}")
+                    elif response.status_code == 429:
+                        ai_reply_content = f"API请求频率超限。错误代码: {response.status_code}"
+                        print(f"错误详情: {response.text}")
+                    else:
+                        error_detail = response.text
+                        ai_reply_content = f"AI服务调用失败。状态码: {response.status_code}, 详情: {error_detail}"
+                        print(f"错误详情: {response.text}")
+
+                    print("=" * 80)
+
+            except Exception as e:
+                import traceback
+                traceback.print_exc() # Print full traceback to backend logs
+                print(f"Debug: AI call failed - {type(e).__name__}: {str(e)}")
+                ai_reply_content = f"AI服务调用失败: {type(e).__name__}: {str(e)}"
     else:
-        ai_reply_content = f"已收到消息: '{request.message}'。使用模型: {selected_ai_model_identifier}。这是一个模拟回复。"
-        if system_prompt:
-            ai_reply_content = f"（系统提示：{system_prompt}）" + ai_reply_content
+        ai_reply_content = f"AI服务未配置。请在AI管理中选择一个AI模型。"
 
     # ---------------------
 
     # 保存AI消息
     ai_message = Message(
         conversation_id=conversation_id,
-        role='ai',
+        role='assistant',
+        content=ai_reply_content
+    )
+    db.add(ai_message)
+    db.commit()
+
+    return {"reply": ai_reply_content, "conversation_id": conversation_id}
+
+@app.post("/api/chat/stream")
+def chat_with_ai_stream(request: ChatRequest, db: Session = Depends(get_db)):
+    conversation_id = request.conversation_id
+    system_prompt = None
+    selected_ai_model_identifier = "default_model"
+
+    # 获取AI模型和提供商信息
+    selected_ai_model = None
+    selected_ai_provider = None
+
+    if request.prompt_template_id:
+        prompt_template = db.query(PromptTemplate).filter(PromptTemplate.id == request.prompt_template_id).first()
+        if prompt_template:
+            # 使用新的提示词处理函数
+            from prompt_utils import process_prompt_template
+            system_prompt = process_prompt_template(db, prompt_template, request.resources)
+
+    if request.ai_model_id:
+        selected_ai_model = db.query(AIModel).filter(AIModel.id == request.ai_model_id).first()
+        if selected_ai_model:
+            selected_ai_model_identifier = selected_ai_model.model_identifier
+            selected_ai_provider = db.query(AIProvider).filter(AIProvider.id == selected_ai_model.provider_id).first()
+            if not selected_ai_provider:
+                raise HTTPException(status_code=404, detail="AI提供商不存在")
+
+    # 如果是新对话，则创建对话记录
+    if conversation_id is None:
+        # 自动生成标题：取消息的前30个字符
+        title = request.message[:30] + '...' if len(request.message) > 30 else request.message
+        # AI对话功能不依赖项目，不设置project_id
+        new_conv = Conversation(title=title)
+        db.add(new_conv)
+        db.commit()
+        db.refresh(new_conv)
+        conversation_id = new_conv.id
+
+    # 保存用户消息
+    user_message = Message(
+        conversation_id=conversation_id,
+        role='user',
+        content=request.message
+    )
+    db.add(user_message)
+    db.commit()
+
+    async def generate_stream():
+        # 导入json模块，确保在嵌套函数中可用
+        import json
+
+        # 先发送对话ID，使前端能够保存消息
+        yield f"data: {json.dumps({'type': 'conversation_id', 'conversation_id': conversation_id})}\n\n"
+
+        # 初始化AI回复内容
+        ai_reply_content = ""
+
+        # 如果没有配置AI提供商或模型，返回错误信息
+        if not selected_ai_provider or not selected_ai_model:
+            error_msg = "AI服务未配置。请在AI管理中选择一个AI模型。"
+            yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
+
+            # 保存错误消息到数据库
+            ai_message = Message(
+                conversation_id=conversation_id,
+                role='assistant',
+                content=error_msg
+            )
+            db.add(ai_message)
+            db.commit()
+            return
+
+        # 检查API密钥
+        if not selected_ai_provider.api_key or selected_ai_provider.api_key.strip() == "":
+            error_msg = "AI提供商的API密钥未设置。请在AI管理中配置API密钥。"
+            yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
+
+            # 保存错误消息到数据库
+            ai_message = Message(
+                conversation_id=conversation_id,
+                role='assistant',
+                content=error_msg
+            )
+            db.add(ai_message)
+            db.commit()
+            return
+
+        # 准备消息历史，包括系统提示
+        messages_for_ai = []
+        if system_prompt:
+            messages_for_ai.append({"role": "system", "content": system_prompt})
+            # 输出最终使用的提示词
+            print("="*50)
+            print("最终使用的提示词:")
+            print(system_prompt)
+            print("="*50)
+
+        # 添加历史消息
+        for msg in request.history:
+            messages_for_ai.append({"role": msg["role"], "content": msg["content"]})
+
+        # 添加当前用户消息
+        messages_for_ai.append({"role": "user", "content": request.message})
+
+        # 准备API请求
+        base_url = selected_ai_provider.base_url or "https://api.openai.com/v1"
+        api_key = selected_ai_provider.api_key
+        api_endpoint = f"{base_url.rstrip('/')}/chat/completions"
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
+        }
+
+        # 准备请求载荷，启用流式响应
+        payload = {
+            "model": selected_ai_model.model_identifier,
+            "messages": messages_for_ai,
+            "temperature": selected_ai_model.temperature,
+            "max_tokens": selected_ai_model.max_tokens,
+            "stream": True  # 启用流式响应
+        }
+
+        # 使用httpx进行异步请求，支持流式响应
+        import httpx
+
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                async with client.stream(
+                    "POST",
+                    api_endpoint,
+                    json=payload,
+                    headers=headers
+                ) as response:
+                    if response.status_code != 200:
+                        error_text = await response.aread()
+                        error_msg = f"AI服务调用失败。状态码: {response.status_code}, 详情: {error_text.decode()}"
+                        yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
+
+                        # 保存错误消息到数据库
+                        ai_message = Message(
+                            conversation_id=conversation_id,
+                            role='assistant',
+                            content=error_msg
+                        )
+                        db.add(ai_message)
+                        db.commit()
+                        return
+
+                    # 处理流式响应
+                    async for line in response.aiter_lines():
+                        if line:
+                            # OpenAI的流式响应以"data: "开头
+                            if line.startswith("data: "):
+                                data_str = line[6:]  # 移除"data: "前缀
+
+                                # 检查是否是结束标记
+                                if data_str.strip() == "[DONE]":
+                                    break
+
+                                try:
+                                    data = json.loads(data_str)
+
+                                    # 提取内容片段
+                                    if "choices" in data and len(data["choices"]) > 0:
+                                        delta = data["choices"][0].get("delta", {})
+                                        if "content" in delta:
+                                            content_chunk = delta["content"]
+                                            ai_reply_content += content_chunk
+
+                                            # 发送内容片段到前端
+                                            yield f"data: {json.dumps({'type': 'content', 'content': content_chunk})}\n\n"
+                                except json.JSONDecodeError:
+                                    # 忽略无法解析的JSON行
+                                    pass
+
+                    # 流式响应结束，保存完整的AI回复到数据库
+                    ai_message = Message(
+                        conversation_id=conversation_id,
+                        role='assistant',
+                        content=ai_reply_content
+                    )
+                    db.add(ai_message)
+                    db.commit()
+
+                    # 发送完成信号
+                    yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+        except Exception as e:
+            error_msg = f"AI服务调用失败: {type(e).__name__}: {str(e)}"
+            yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
+
+            # 保存错误消息到数据库
+            ai_message = Message(
+                conversation_id=conversation_id,
+                role='assistant',
+                content=error_msg
+            )
+            db.add(ai_message)
+            db.commit()
+
+    # 返回流式响应
+    return StreamingResponse(
+        generate_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"  # 禁用Nginx缓冲
+        }
+    )
+
+    # ---- AI 调用逻辑 ----
+    ai_reply_content = "抱歉，AI服务暂不可用或配置不正确。"
+
+    if selected_ai_provider and selected_ai_model:
+        # Check if API key is provided
+        if not selected_ai_provider.api_key or selected_ai_provider.api_key.strip() == "":
+            ai_reply_content = f"AI提供商的API密钥未设置。请在AI管理中配置API密钥。"
+        else:
+            # 准备消息历史，包括系统提示
+            messages_for_ai = []
+            if system_prompt:
+                messages_for_ai.append({"role": "system", "content": system_prompt})
+            
+            # 添加历史消息
+            for msg in request.history:
+                messages_for_ai.append({"role": msg["role"], "content": msg["content"]})
+            
+            # 添加当前用户消息
+            messages_for_ai.append({"role": "user", "content": request.message})
+
+            # 动态选择AI客户端并调用 - 使用HTTP请求调用配置的AI服务
+            print(f"Debug: Attempting to call AI provider: {selected_ai_provider.name}")
+            print(f"Debug: Using model: {selected_ai_model.model_identifier}")
+            print(f"Debug: API key is set: {bool(selected_ai_provider.api_key)}")
+            print(f"Debug: Base URL: {selected_ai_provider.base_url}")
+            
+            try:
+                # Default to OpenAI-compatible API if no base_url is provided
+                base_url = selected_ai_provider.base_url or "https://api.openai.com/v1"
+                api_key = selected_ai_provider.api_key
+                
+                if not api_key:
+                    ai_reply_content = "AI提供商的API密钥未设置。请在AI管理中配置API密钥。"
+                else:
+                    # Prepare headers for the API call
+                    headers = {
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {api_key}"
+                    }
+                    
+                    # Prepare the payload for the AI API call
+                    payload = {
+                        "model": selected_ai_model.model_identifier,
+                        "messages": messages_for_ai,
+                        "temperature": selected_ai_model.temperature,
+                        "max_tokens": selected_ai_model.max_tokens,
+                    }
+                    
+                    # Determine the correct endpoint URL
+                    # For most OpenAI-compatible APIs, it's chat/completions
+                    api_endpoint = f"{base_url.rstrip('/')}/chat/completions"
+                    
+                    # 添加详细的调用日志
+                    import datetime
+                    import json
+                    print("=" * 80)
+                    print("【AI调用详细日志】")
+                    print(f"调用时间: {datetime.datetime.now()}")
+                    print(f"提供商名称: {selected_ai_provider.name}")
+                    print(f"API基础URL: {base_url}")
+                    print(f"API端点: {api_endpoint}")
+                    print(f"模型名称: {selected_ai_model.name}")
+                    print(f"模型标识符: {selected_ai_model.model_identifier}")
+                    print(f"API密钥: {api_key[:10]}..." if len(api_key) > 10 else f"API密钥: {api_key}")
+                    print(f"温度参数: {selected_ai_model.temperature}")
+                    print(f"最大Token数: {selected_ai_model.max_tokens}")
+                    print("请求载荷:")
+                    print(json.dumps(payload, indent=2, ensure_ascii=False))
+                    print("=" * 80)
+                    
+                    # Make the HTTP request to the AI provider
+                    import requests
+                    response = requests.post(
+                        api_endpoint,
+                        json=payload,
+                        headers=headers,
+                        timeout=30.0  # 30 second timeout
+                    )
+                    
+                    print(f"响应状态码: {response.status_code}")
+
+                    if response.status_code == 200:
+                        response_data = response.json()
+                        ai_reply_content = response_data['choices'][0]['message']['content']
+                        print("响应内容:")
+                        print(json.dumps(response_data, indent=2, ensure_ascii=False))
+                    elif response.status_code == 401:
+                        ai_reply_content = f"API密钥无效或已过期。错误代码: {response.status_code}"
+                        print(f"错误详情: {response.text}")
+                    elif response.status_code == 404:
+                        ai_reply_content = f"API端点未找到。请检查API URL是否正确。错误代码: {response.status_code}"
+                        print(f"错误详情: {response.text}")
+                    elif response.status_code == 429:
+                        ai_reply_content = f"API请求频率超限。错误代码: {response.status_code}"
+                        print(f"错误详情: {response.text}")
+                    else:
+                        error_detail = response.text
+                        ai_reply_content = f"AI服务调用失败。状态码: {response.status_code}, 详情: {error_detail}"
+                        print(f"错误详情: {response.text}")
+
+                    print("=" * 80)
+                        
+            except Exception as e:
+                import traceback
+                traceback.print_exc() # Print full traceback to backend logs
+                print(f"Debug: AI call failed - {type(e).__name__}: {str(e)}")
+                ai_reply_content = f"AI服务调用失败: {type(e).__name__}: {str(e)}"
+    else:
+        ai_reply_content = f"AI服务未配置。请在AI管理中选择一个AI模型。"
+
+    # ---------------------
+
+    # 保存AI消息
+    ai_message = Message(
+        conversation_id=conversation_id,
+        role='assistant',
         content=ai_reply_content
     )
     db.add(ai_message)
@@ -912,6 +1273,8 @@ def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
 
 # 启动服务器
 if __name__ == "__main__":
-    print("正在启动 StoryForge API 服务器...")
-    print("服务器将在 http://localhost:9009 运行")
-    uvicorn.run(app, host="0.0.0.0", port=9009)
+    import os
+    port = int(os.getenv("PORT", 9009))  # Allow port to be configured via environment variable
+    print(f"正在启动 StoryForge API 服务器...")
+    print(f"服务器将在 http://localhost:{port} 运行")
+    uvicorn.run(app, host="0.0.0.0", port=port)

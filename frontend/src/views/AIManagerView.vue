@@ -144,10 +144,10 @@
           <div class="provider-actions">
             <el-button-group>
               <el-tooltip content="编辑提供商" placement="top">
-                <el-button :icon="Edit" size="small" @click="openEditProviderModal(provider)" :disabled="provider.is_system"></el-button>
+                <el-button :icon="Edit" size="small" @click="openEditProviderModal(provider)"></el-button>
               </el-tooltip>
               <el-tooltip content="删除提供商" placement="top">
-                <el-button :icon="Delete" type="danger" size="small" @click="deleteProvider(provider)" :disabled="provider.is_system"></el-button>
+                <el-button :icon="Delete" type="danger" size="small" @click="deleteProvider(provider)"></el-button>
               </el-tooltip>
             </el-button-group>
             <el-switch v-model="provider.enabled" @change="updateProviderStatus(provider)" style="margin-left: 15px;" />
@@ -156,14 +156,14 @@
         <div class="provider-body">
           <el-form label-position="top">
             <el-form-item label="API Key">
-              <el-input v-model="provider.api_key" show-password placeholder="请输入 API Key" :disabled="provider.is_system">
+              <el-input v-model="provider.api_key" show-password placeholder="请输入 API Key">
                 <template #append>
                   <el-button @click="checkApiKey(provider)">检测</el-button>
                 </template>
               </el-input>
             </el-form-item>
             <el-form-item label="API Base URL">
-              <el-input v-model="provider.base_url" placeholder="请输入 API 地址" :disabled="provider.is_system" @input="updateUrlPreview('card', provider)"></el-input>
+              <el-input v-model="provider.base_url" placeholder="请输入 API 地址" @input="updateUrlPreview('card', provider)"></el-input>
               <div v-if="urlPreview[provider.id]" class="url-preview">
                 <p><strong>对话补全端点:</strong> {{ urlPreview[provider.id].chatCompletionEndpoint }}</p>
                 <p v-if="urlPreview[provider.id].modelsEndpoint"><strong>模型列表端点:</strong> {{ urlPreview[provider.id].modelsEndpoint }}</p>

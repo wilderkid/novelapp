@@ -28,15 +28,14 @@ class Project(Base):
 
     volumes = relationship("Volume", back_populates="project")
     chapters = relationship("Chapter", back_populates="project", cascade="all, delete-orphan")
-    conversations = relationship("Conversation", back_populates="project", cascade="all, delete-orphan")
+    # 移除与Conversation的关系，使AI对话功能不依赖项目
     worldviews = relationship("Worldview", back_populates="project")
     rpg_characters = relationship("RPGCharacter", back_populates="project")
     organizations = relationship("Organization", back_populates="project")
     supernatural_powers = relationship("SupernaturalPower", back_populates="project")
     weapons = relationship("Weapon", back_populates="project")
     dungeons = relationship("Dungeon", back_populates="project")
-    # prompt_templates = relationship("PromptTemplate", back_populates="project")  # 移除与项目的关系
-    ai_providers = relationship("AIProvider", back_populates="project")
+    prompt_templates = relationship("PromptTemplate", back_populates="project")  # 添加与项目的关系
 
 
 
@@ -78,7 +77,6 @@ class AIProvider(Base):
     __tablename__ = "ai_providers"
 
     id = Column(Integer, primary_key=True, index=True)
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=True)  # 改为可选，支持全局和项目级别
     name = Column(String, nullable=False)  # 例如: "OpenAI", "Gemini"
     api_key = Column(String)
     base_url = Column(String)
@@ -87,7 +85,6 @@ class AIProvider(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
-    project = relationship("Project", back_populates="ai_providers")
     models = relationship("AIModel", back_populates="provider", cascade="all, delete-orphan")
 
 class AIModel(Base):
@@ -116,10 +113,11 @@ class PromptTemplate(Base):
     content = Column(Text, nullable=False)
     variables = Column(JSON)
     is_default = Column(Boolean, default=False)
+    project_id = Column(Integer, ForeignKey("projects.id"))  # 添加项目ID字段
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
-    # project = relationship("Project", back_populates="prompt_templates")  # 移除与项目的关系
+    project = relationship("Project", back_populates="prompt_templates")  # 添加与项目的关系
 
 
 class Worldview(Base):
@@ -193,18 +191,18 @@ class Dungeon(Base):
 class Conversation(Base):
     __tablename__ = 'conversations'
     id = Column(Integer, primary_key=True)
-    project_id = Column(Integer, ForeignKey('projects.id', ondelete='CASCADE'), nullable=False)
+    # 移除project_id，使AI对话功能不依赖项目
     title = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    project = relationship("Project", back_populates="conversations")
+    # 移除与Project的关系，使AI对话功能不依赖项目
     messages = relationship("Message", back_populates="conversation", cascade="all, delete-orphan")
 
 class Message(Base):
     __tablename__ = 'messages'
     id = Column(Integer, primary_key=True)
     conversation_id = Column(Integer, ForeignKey('conversations.id', ondelete='CASCADE'), nullable=False)
-    role = Column(String, nullable=False)  # 'user' or 'ai'
+    role = Column(String, nullable=False)  # 'user' or 'assistant'
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 

@@ -1,20 +1,27 @@
 <template>
   <div class="prompt-view-container">
-    <div class="content-header">
-      <h2 class="page-title">
-        <svg viewBox="0 0 1024 1024" width="28" height="28">
-          <path d="M512 64C264.6 64 64 264.6 64 512s200.6 448 448 448 448-200.6 448-448S759.4 64 512 64zm0 820c-205.4 0-372-166.6-372-372s166.6-372 372-372 372 166.6 372 372-166.6 372-372 372z" fill="currentColor"></path>
-          <path d="M696 480H544V328c0-17.7-14.3-32-32-32s-32 14.3-32 32v152H328c-17.7 0-32 14.3-32 32s14.3 32 32 32h152v152c0 17.7 14.3 32 32 32s32-14.3 32-32V544h152c17.7 0 32-14.3 32-32s-14.3-32-32-32z" fill="currentColor"></path>
-        </svg>
-        提示词管理
-      </h2>
-      <el-button type="primary" @click="handleAddNew" class="add-button">
-        <svg viewBox="0 0 1024 1024" width="16" height="16">
-          <path d="M512 64C264.6 64 64 264.6 64 512s200.6 448 448 448 448-200.6 448-448S759.4 64 512 64zm192 472c0 4.4-3.6 8-8 8H544v152c0 4.4-3.6 8-8 8h-48c-4.4 0-8-3.6-8-8V544H328c-4.4 0-8-3.6-8-8v-48c0-4.4 3.6-8 8-8h152V328c0-4.4 3.6-8 8-8h48c4.4 0 8 3.6 8 8v152h152c4.4 0 8 3.6 8 8v48z" fill="currentColor"></path>
-        </svg>
-        新增提示词
-      </el-button>
+    <!-- 未选择小说时的提示 -->
+    <div v-if="!projectStore.currentProject" class="no-project-selected">
+      <el-empty description="请先选择一个小说项目">
+        <el-button type="primary" @click="goToNovels">选择小说</el-button>
+      </el-empty>
     </div>
+
+    <!-- 已选择小说时显示提示词管理 -->
+    <template v-else>
+      <div class="content-header">
+        <el-breadcrumb separator="/">
+          <el-breadcrumb-item :to="{ path: '/novels' }">小说管理</el-breadcrumb-item>
+          <el-breadcrumb-item>{{ projectStore.currentProject.title }}</el-breadcrumb-item>
+          <el-breadcrumb-item>提示词管理</el-breadcrumb-item>
+        </el-breadcrumb>
+        <el-button type="primary" @click="handleAddNew" class="add-button">
+          <svg viewBox="0 0 1024 1024" width="16" height="16">
+            <path d="M512 64C264.6 64 64 264.6 64 512s200.6 448 448 448 448-200.6 448-448S759.4 64 512 64zm192 472c0 4.4-3.6 8-8 8H544v152c0 4.4-3.6 8-8 8h-48c-4.4 0-8-3.6-8-8V544H328c-4.4 0-8-3.6-8-8v-48c0-4.4 3.6-8 8-8h152V328c0-4.4 3.6-8 8-8h48c4.4 0 8 3.6 8 8v152h152c4.4 0 8 3.6 8 8v48z" fill="currentColor"></path>
+          </svg>
+          新增提示词
+        </el-button>
+      </div>
 
     <div class="prompt-cards-container" v-loading="loading">
       <el-card 
@@ -92,8 +99,17 @@
             type="textarea" 
             :rows="10" 
             :readonly="isViewing"
-            placeholder="请输入提示词内容，可使用{{变量名}}格式定义变量">
+            placeholder="请输入提示词内容，可使用{{变量名}}格式引用资源">
           </el-input>
+          <el-button 
+            v-if="!isViewing"
+            type="primary" 
+            size="small" 
+            class="reference-button"
+            @click="openResourceDialog"
+            style="margin-top: 8px;">
+            引用资源
+          </el-button>
         </el-form-item>
       </el-form>
       <template #footer v-if="!isViewing" class="dialog-footer">
@@ -101,6 +117,26 @@
         <el-button type="primary" @click="handleSave" :loading="saving">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 资源选择对话框 -->
+    <el-dialog
+      v-model="showResourceDialog"
+      title="选择要引用的资源"
+      width="50%"
+      :close-on-click-modal="false">
+      <div class="resource-list" v-if="resources.length > 0">
+        <div 
+          v-for="resource in resources" 
+          :key="resource.id"
+          class="resource-item"
+          @click="insertResourceReference(resource)">
+          <div class="resource-name">{{ resource.name }}</div>
+          <div class="resource-content">{{ resource.content }}</div>
+        </div>
+      </div>
+      <el-empty v-else description="当前小说暂无资源" />
+    </el-dialog>
+    </template>
   </div>
 </template>
 
@@ -126,6 +162,10 @@ const currentPrompt = ref({});
 const loading = ref(false);
 const saving = ref(false);
 const hoverCard = ref(null);
+const resources = ref([]); // 当前小说的资源列表
+const showResourceDialog = ref(false); // 是否显示资源选择对话框
+const selectedResource = ref(null); // 选中的资源
+const cursorPosition = ref(0); // 文本框中的光标位置
 
 // 根据提示词名称获取图标
 const getPromptIcon = (name) => {
@@ -162,10 +202,15 @@ const dialogTitle = computed(() => {
 });
 
 const fetchPrompts = async () => {
+  if (!projectStore.currentProject) {
+    prompts.value = [];
+    return;
+  }
+
   loading.value = true;
   try {
-    // 使用全局API，不依赖项目ID
-    const response = await axios.get(`${API_URL}/prompt-templates`);
+    // 使用项目ID获取提示词
+    const response = await axios.get(`${API_URL}/projects/${projectStore.currentProject.id}/prompt-templates`);
     prompts.value = response.data;
   } catch (error) {
     console.error('加载提示词列表失败:', error);
@@ -175,9 +220,86 @@ const fetchPrompts = async () => {
   }
 };
 
-onMounted(fetchPrompts);
+onMounted(() => {
+  // 监听项目变化，当项目变化时重新获取提示词
+  fetchPrompts();
+});
+
+// 监听当前项目变化
+projectStore.$subscribe((mutation, state) => {
+  if (state.currentProject) {
+    fetchPrompts();
+  } else {
+    prompts.value = [];
+  }
+});
+
+const goToNovels = () => {
+  router.push('/novels');
+};
+
+// 获取当前小说的资源
+const fetchResources = async () => {
+  if (!projectStore.currentProject) {
+    resources.value = [];
+    return;
+  }
+
+  try {
+    const response = await axios.get(`${API_URL}/projects/${projectStore.currentProject.id}/resources`);
+    resources.value = response.data;
+  } catch (error) {
+    console.error('加载资源列表失败:', error);
+    ElMessage.error('加载资源列表失败');
+  }
+};
+
+// 打开资源选择对话框
+const openResourceDialog = () => {
+  if (!projectStore.currentProject) {
+    ElMessage.error('请先选择一个小说项目');
+    return;
+  }
+
+  fetchResources();
+  showResourceDialog.value = true;
+};
+
+// 插入资源引用到提示词内容中
+const insertResourceReference = (resource) => {
+  if (!resource) return;
+
+  // 获取当前光标位置
+  const textarea = document.querySelector('.prompt-content-textarea');
+  if (!textarea) return;
+
+  const start = textarea.selectionStart;
+  const end = textarea.selectionEnd;
+  const text = currentPrompt.value.content;
+
+  // 在光标位置插入资源引用
+  const beforeText = text.substring(0, start);
+  const afterText = text.substring(end);
+  const insertText = `{{${resource.name}}}`;
+
+  currentPrompt.value.content = beforeText + insertText + afterText;
+
+  // 关闭对话框
+  showResourceDialog.value = false;
+
+  // 设置光标位置到插入文本之后
+  setTimeout(() => {
+    textarea.focus();
+    textarea.setSelectionRange(start + insertText.length, start + insertText.length);
+  }, 0);
+};
 
 const handleAddNew = () => {
+  if (!projectStore.currentProject) {
+    ElMessage.error('请先选择一个小说项目');
+    return;
+  }
+
   isEditing.value = false;
   isViewing.value = false;
   currentPrompt.value = { name: '', content: '' };
@@ -219,10 +341,16 @@ const handleSave = async () => {
     return;
   }
 
+  if (!projectStore.currentProject) {
+    ElMessage.error('请先选择一个小说项目');
+    return;
+  }
+
   saving.value = true;
   const payload = {
     ...currentPrompt.value,
-    // 不再关联项目ID，作为全局提示词
+    // 关联到当前项目ID
+    project_id: projectStore.currentProject.id
   };
 
   try {
@@ -528,6 +656,45 @@ const handleSave = async () => {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* 资源选择对话框样式 */
+.resource-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.resource-item {
+  padding: 12px;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.resource-item:hover {
+  background-color: #f5f7fa;
+  border-color: #409eff;
+}
+
+.resource-name {
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 6px;
+}
+
+.resource-content {
+  color: #606266;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 引用资源按钮样式 */
+.reference-button {
+  margin-left: 10px;
 }
 
 .prompt-card {

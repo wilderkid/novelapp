@@ -25,15 +25,12 @@
                             <el-icon><MagicStick /></el-icon>
                             <template #title><span>提示词管理</span></template>
                           </el-menu-item>      
+
                 <el-menu-item index="5">
-                  <el-icon><Setting /></el-icon>
-                  <template #title><span>项目设置</span></template>
-                </el-menu-item>
-                <el-menu-item index="6">
                   <el-icon><Cpu /></el-icon>
                   <template #title><span>AI 管理</span></template>
                 </el-menu-item>
-                <el-menu-item index="7">
+                <el-menu-item index="6">
                   <el-icon><ChatDotRound /></el-icon>
                   <template #title><span>AI 对话</span></template>
                 </el-menu-item>
@@ -92,7 +89,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Document, Setting, Close, MagicStick, Reading, Collection, Fold, Expand, Cpu, ChatDotRound } from '@element-plus/icons-vue'
+import { Document, Close, MagicStick, Reading, Collection, Fold, Expand, Cpu, ChatDotRound } from '@element-plus/icons-vue'
 import axios from 'axios';
 import { useProjectStore } from './stores/projectStore';
 
@@ -131,14 +128,10 @@ const handleMenuSelect = (index) => {
     case '4':
       router.push('/prompts')
       break
-
     case '5':
-      router.push('/settings')
-      break
-    case '6':
       router.push('/ai-management')
       break
-    case '7':
+    case '6':
       router.push('/chat')
       break
   }

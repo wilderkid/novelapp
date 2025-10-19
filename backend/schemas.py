@@ -95,7 +95,6 @@ class AIProviderUpdate(AIProviderBase):
 
 class AIProviderResponse(AIProviderBase):
     id: int
-    project_id: Optional[int] = None
     is_system: bool
     models: List[AIModelResponse] = []
 
@@ -225,11 +224,12 @@ class ConversationBase(BaseModel):
     title: str
 
 class ConversationCreate(ConversationBase):
-    project_id: Optional[int] = None
+    # 移除project_id，使AI对话功能不依赖项目
+    pass
 
 class ConversationResponse(ConversationBase):
     id: int
-    project_id: Optional[int]
+    # 移除project_id，使AI对话功能不依赖项目
     created_at: datetime
     messages: List[MessageResponse] = []
 

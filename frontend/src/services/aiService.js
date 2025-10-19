@@ -154,14 +154,7 @@ export const deleteProvider = (providerId) => {
   return axios.delete(`${API_URL}/ai-providers/${providerId}`);
 };
 
-// AI Provider services - 项目级别（保持原有功能）
-export const getProjectProviders = (projectId) => {
-  return axios.get(`${API_URL}/projects/${projectId}/ai-providers`);
-};
-
-export const createProjectProvider = (projectId, data) => {
-  return axios.post(`${API_URL}/projects/${projectId}/ai-providers`, data);
-};
+// AI Provider services - 已移除项目级别API，AI提供商不再与项目关联
 
 // AI Model services
 export const getModels = (providerId) => {

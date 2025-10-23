@@ -7,6 +7,9 @@
 
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { useEditorStore } from '../stores/editorStore' // 引入Store
+
+const editorStore = useEditorStore() // 获取Store实例
 
 // 定义props
 const props = defineProps({
@@ -196,6 +199,7 @@ const initEditor = (initialContent = '') => {
         editor.ready(() => {
           isEditorReady = true;
           isEditorInitializing = false;
+          editorStore.setActiveEditorInstance(editor); // 注册编辑器实例
           emit('ready', editor);
         });
       } catch (e) {
@@ -303,6 +307,10 @@ onMounted(() => {
 
 // 组件卸载时销毁编辑器
 onBeforeUnmount(() => {
+  // 如果当前编辑器是激活的实例，则清除它
+  if (editorStore.activeEditorInstance === editor) {
+    editorStore.clearActiveEditorInstance();
+  }
   destroyEditor();
 });
 

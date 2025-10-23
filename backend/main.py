@@ -711,53 +711,51 @@ def render_prompt(payload: dict, db: Session = Depends(get_db)):
     content = payload.get("content", "")
     project_id = payload.get("project_id")
 
-    # 如果没有提供项目ID，直接返回原始内容，不进行渲染
-    # AI功能是全局的，渲染可能用于特定项目上下文，但不是必需的
-    if not project_id:
+    if not project_id or '{{' not in content:
         return {"rendered_content": content}
 
-    keywords = re.findall(r"\{\{\s*(.*?)\s*\}\}", content)
-    if not keywords:
-        return {"rendered_content": content}
-
-    # 数据源模型列表
-    # The order determines precedence if names are duplicated across tables.
     search_models = [
         RPGCharacter, Organization, SupernaturalPower, Weapon, Dungeon, Chapter, Volume, Project
     ]
 
-    for keyword in set(keywords):
-        found_content = None
+    def replacer(match):
+        keyword = match.group(1).strip()
         for model in search_models:
+            query = db.query(model)
             query_attr = 'name' if hasattr(model, 'name') else 'title'
-            result = db.query(model).filter(
-                getattr(model, 'project_id', None) == project_id, 
-                getattr(model, query_attr) == keyword
-            ).first()
+
+            if model == Chapter:
+                query = query.filter(Chapter.project_id == project_id, Chapter.title.startswith(keyword))
+            elif hasattr(model, 'project_id'):
+                query = query.filter(model.project_id == project_id, getattr(model, query_attr) == keyword)
+            else:
+                query = query.filter(getattr(model, query_attr) == keyword)
+
+            result = query.first()
             
             if result:
+                found_content = None
                 if hasattr(result, 'content') and result.content:
                     found_content = result.content
                 elif hasattr(result, 'description') and result.description:
                     found_content = result.description
-                else: # Fallback to name/title itself if no content/description
+                else:
                     found_content = getattr(result, query_attr, '')
-                break # Stop searching once a match is found
-        
-        if found_content:
-            content = content.replace(f"{{{{ {keyword} }}}}", found_content)
+                return str(found_content)
 
-    return {"rendered_content": content}
+        return match.group(0) # Return original if no match found
+
+    final_content = re.sub(r'\{\{\s*(.*?)\s*\}\}', replacer, content)
+    return {"rendered_content": final_content}
 
 
 class ChatRequest(BaseModel):
     message: str
-    # 移除project_id参数，AI对话功能不依赖项目
+    project_id: Optional[int] = None # 新增：允许前端传递项目ID
     conversation_id: Optional[int] = None
     history: List[dict] = []
     prompt_template_id: Optional[int] = None
     ai_model_id: Optional[int] = None
-    # 添加resources字段，用于传递提示词中需要的变量值
     resources: Optional[dict] = None
 
 @app.post("/api/chat")
@@ -776,7 +774,7 @@ def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
         if prompt_template:
             # 使用新的提示词处理函数
             from prompt_utils import process_prompt_template
-            system_prompt = process_prompt_template(db, prompt_template, request.resources)
+            system_prompt = process_prompt_template(db, prompt_template, request.project_id, request.resources)
 
     if request.ai_model_id:
         selected_ai_model = db.query(AIModel).filter(AIModel.id == request.ai_model_id).first()
@@ -949,7 +947,7 @@ def chat_with_ai_stream(request: ChatRequest, db: Session = Depends(get_db)):
         if prompt_template:
             # 使用新的提示词处理函数
             from prompt_utils import process_prompt_template
-            system_prompt = process_prompt_template(db, prompt_template, request.resources)
+            system_prompt = process_prompt_template(db, prompt_template, request.project_id, request.resources)
 
     if request.ai_model_id:
         selected_ai_model = db.query(AIModel).filter(AIModel.id == request.ai_model_id).first()

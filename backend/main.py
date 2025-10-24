@@ -255,7 +255,7 @@ def get_global_ai_providers(db: Session = Depends(get_db)):
 @app.post("/api/ai-providers", response_model=AIProviderResponse)
 def create_global_ai_provider(provider: AIProviderCreate, db: Session = Depends(get_db)):
     """创建新的AI提供商（全局级别）"""
-    db_provider = AIProvider(**provider.model_dump(), project_id=None)
+    db_provider = AIProvider(**provider.model_dump())
     db.add(db_provider)
     db.commit()
     db.refresh(db_provider)

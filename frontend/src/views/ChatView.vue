@@ -120,7 +120,7 @@
 </template>
 
 <script setup>
-import { ref, nextTick, onMounted } from 'vue';
+import { ref, nextTick, onMounted, computed } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import axios from 'axios';
 import { marked } from 'marked';
@@ -130,6 +130,7 @@ import { CopyDocument, Refresh, Edit, Delete, ChatDotRound, Setting } from '@ele
 import { useProjectStore } from '@/stores/projectStore';
 
 const projectStore = useProjectStore();
+const currentProject = computed(() => projectStore.currentProject);
 const userInput = ref('');
 const messages = ref([]);
 const conversations = ref([]);
@@ -343,6 +344,16 @@ const sendMessage = async (messageContent = null) => {
   }
   if (isLoading.value) return;
 
+  // 检查用户输入和提示词模板中是否包含变量，如果包含，则必须有项目上下文
+  const selectedTemplate = promptTemplates.value.find(t => t.id === selectedPromptTemplateId.value);
+  const templateContent = selectedTemplate ? selectedTemplate.content : '';
+  const fullContentToCheck = content + templateContent; // 检查用户输入和模板内容
+
+  if (fullContentToCheck.includes('{{') && !currentProject.value) {
+    ElMessage.warning('您似乎使用了变量，请先在"小说管理"中选择一个项目以正确渲染它们。');
+    return;
+  }
+
   isLoading.value = true;
 
   // 如果是新消息（非重新生成），则添加到消息列表
@@ -356,6 +367,29 @@ const sendMessage = async (messageContent = null) => {
   messages.value.push({ role: 'assistant', content: '正在思考中...' });
   scrollToBottom();
 
+  let processedUserInput = content;
+
+  // 如果用户输入包含变量且有项目上下文，则先进行渲染
+  if (content.includes('{{') && currentProject.value) {
+    try {
+      const renderPayload = {
+        content: content,
+        project_id: currentProject.value.id,
+      };
+      const response = await axios.post('http://localhost:9009/api/prompts/render', renderPayload);
+      processedUserInput = response.data.rendered_content;
+      console.log('[ChatView DEBUG] User input rendered to:', processedUserInput);
+    } catch (error) {
+      console.error('Failed to render user input:', error);
+      ElMessage.error('渲染用户输入中的变量失败。');
+      messages.value.pop(); // 移除已添加的AI消息
+      messages.value.pop(); // 移除已添加的用户消息
+      userInput.value = content; // 恢复用户输入
+      isLoading.value = false;
+      return;
+    }
+  }
+
   try {
     // Build history excluding the current "正在思考中..." AI message
     const actualHistory = [...messages.value]; // Create a copy
@@ -367,6 +401,7 @@ const sendMessage = async (messageContent = null) => {
     console.log("【前端AI调用详细日志】");
     console.log("调用时间:", new Date());
     console.log("消息内容:", content);
+    console.log("处理后的消息内容:", processedUserInput);
     console.log("对话ID:", currentConversationId.value);
     console.log("历史消息数量:", actualHistory.length);
     console.log("提示模板ID:", selectedPromptTemplateId.value);
@@ -383,13 +418,14 @@ const sendMessage = async (messageContent = null) => {
     }
 
     const payload = {
-      message: content,
+      message: processedUserInput, // 使用处理后的用户输入
       // AI对话功能不依赖project_id，移除此参数
       conversation_id: currentConversationId.value,
       history: actualHistory.map(m => ({ role: m.role, content: m.content })),
       prompt_template_id: selectedPromptTemplateId.value,
       ai_model_id: selectedAiModelId.value,
       resources: resources,
+      project_id: currentProject.value ? currentProject.value.id : null // 添加项目ID
     };
 
     console.log("请求载荷:", payload);
@@ -442,6 +478,16 @@ const sendMessageStream = async (messageContent = null) => {
   }
   if (isLoading.value) return;
 
+  // 检查用户输入和提示词模板中是否包含变量，如果包含，则必须有项目上下文
+  const selectedTemplate = promptTemplates.value.find(t => t.id === selectedPromptTemplateId.value);
+  const templateContent = selectedTemplate ? selectedTemplate.content : '';
+  const fullContentToCheck = content + templateContent; // 检查用户输入和模板内容
+
+  if (fullContentToCheck.includes('{{') && !currentProject.value) {
+    ElMessage.warning('您似乎使用了变量，请先在"小说管理"中选择一个项目以正确渲染它们。');
+    return;
+  }
+
   isLoading.value = true;
 
   // 如果是新消息（非重新生成），则添加到消息列表
@@ -454,6 +500,29 @@ const sendMessageStream = async (messageContent = null) => {
 
   messages.value.push({ role: 'assistant', content: '正在思考中...' });
   scrollToBottom();
+
+  let processedUserInput = content;
+
+  // 如果用户输入包含变量且有项目上下文，则先进行渲染
+  if (content.includes('{{') && currentProject.value) {
+    try {
+      const renderPayload = {
+        content: content,
+        project_id: currentProject.value.id,
+      };
+      const response = await axios.post('http://localhost:9009/api/prompts/render', renderPayload);
+      processedUserInput = response.data.rendered_content;
+      console.log('[ChatView DEBUG] User input rendered to:', processedUserInput);
+    } catch (error) {
+      console.error('Failed to render user input:', error);
+      ElMessage.error('渲染用户输入中的变量失败。');
+      messages.value.pop(); // 移除已添加的AI消息
+      messages.value.pop(); // 移除已添加的用户消息
+      userInput.value = content; // 恢复用户输入
+      isLoading.value = false;
+      return;
+    }
+  }
 
   try {
     // Build history excluding the current "正在思考中..." AI message
@@ -473,12 +542,13 @@ const sendMessageStream = async (messageContent = null) => {
 
     // 准备请求参数
     const payload = {
-      message: content,
+      message: processedUserInput, // 使用处理后的用户输入
       conversation_id: currentConversationId.value,
       history: actualHistory.map(m => ({ role: m.role, content: m.content })),
       prompt_template_id: selectedPromptTemplateId.value,
       ai_model_id: selectedAiModelId.value,
       resources: resources,
+      project_id: currentProject.value ? currentProject.value.id : null // 添加项目ID
     };
 
     // 使用fetch API进行流式请求

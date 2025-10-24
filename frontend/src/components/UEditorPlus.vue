@@ -113,5 +113,14 @@ const onEditorReady = (editor) => {
 .ueditor-plus-container {
   height: 100%;
   width: 100%;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px 0 rgba(0,0,0,0.05);
+}
+
+.ueditor-plus-container:focus-within {
+  border-color: #409eff;
+  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.1);
 }
 </style>

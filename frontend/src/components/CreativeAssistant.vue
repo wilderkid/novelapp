@@ -3,25 +3,41 @@
     <div class="assistant-container">
       <div class="assistant-header">
         <h3>创作助手</h3>
-        <el-button type="text" @click="toggleCollapse">
-          <el-icon><Right /></el-icon>
-        </el-button>
+        <div>
+          <el-button type="text" @click="startNewConversation" title="开始新对话">
+            <el-icon><Refresh /></el-icon>
+          </el-button>
+          <el-button type="text" @click="clearCurrentMessages" title="清除当前对话">
+            <el-icon><Delete /></el-icon>
+          </el-button>
+          <el-button type="text" @click="toggleCollapse">
+            <el-icon><Right /></el-icon>
+          </el-button>
+        </div>
       </div>
       <div class="assistant-content">
         <div class="chat-messages" ref="messagesContainer">
           <div v-for="(msg, index) in messages" :key="index" class="message-wrapper" :class="`message-wrapper-${msg.role}`">
             <!-- 添加头像 -->
             <div class="avatar" :class="`avatar-${msg.role}`">
-              <svg v-if="msg.role === 'assistant'" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" fill="#4a6cf7"/>
-              </svg>
-              <svg v-else viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" fill="#10b981"/>
-              </svg>
+              <el-icon v-if="msg.role === 'assistant'" :size="24">
+                <ChatLineRound />
+              </el-icon>
+              <el-icon v-else :size="24">
+                <User />
+              </el-icon>
             </div>
             <div class="message" :class="`message-${msg.role}`">
               <div v-if="msg.role === 'assistant'" v-html="formatMessage(msg.content)" class="markdown-body"></div>
               <span v-else>{{ msg.content }}</span>
+              <div v-if="msg.role === 'assistant' && !isLoading" class="message-actions">
+                <el-button size="small" circle :icon="CopyDocument" @click="copyMessage(msg.content)" title="复制消息"></el-button>
+                <el-button size="small" circle :icon="Refresh" @click="regenerateResponse(index)" title="重新生成"></el-button>
+                <el-button size="small" circle :icon="Delete" @click="deleteMessage(index)" title="删除消息"></el-button>
+              </div>
+              <div v-if="msg.role === 'user' && !isLoading" class="message-actions">
+                <el-button size="small" circle :icon="Delete" @click="deleteMessage(index)" title="删除消息"></el-button>
+              </div>
             </div>
           </div>
         </div>
@@ -79,11 +95,14 @@
             @keydown.enter.prevent="handleEnter"
           />
           <div class="input-actions">
-            <el-button type="primary" @click="sendMessageStream" :loading="isLoading">发送</el-button>
+            <el-button type="primary" @click="newSendMessageStream" :loading="isLoading" :icon="Promotion">
+              <span v-if="!isLoading">发送</span>
+            </el-button>
             <el-button 
               @click="insertIntoEditor" 
               :disabled="!activeEditorInstance || !lastAiResponse"
-              title="将最后一条AI回复插入编辑器">
+              title="将最后一条AI回复插入编辑器"
+              :icon="DocumentCopy">
               写入编辑器
             </el-button>
 
@@ -100,15 +119,17 @@ import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { useEditorStore } from '../stores/editorStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useConversationStore } from '../stores/conversationStore';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import axios from 'axios';
-import { Right, ChatDotRound, Setting, CopyDocument, Refresh } from '@element-plus/icons-vue';
+import { Right, ChatDotRound, Setting, CopyDocument, Refresh, ChatLineRound, User, Delete, Promotion, DocumentCopy } from '@element-plus/icons-vue';
 import MarkdownIt from 'markdown-it';
 
 const editorStore = useEditorStore();
 const projectStore = useProjectStore();
 const conversationStore = useConversationStore();
 const userInput = ref('');
+// Add a conversation ID to track the conversation in the creative assistant
+const conversationId = ref(null);
 const messages = ref([]); // Keep local messages for the temporary creative assistant session
 const isLoading = ref(false);
 const messagesContainer = ref(null);
@@ -136,6 +157,9 @@ const formatMessage = (content) => {
 const toggleCollapse = () => {
   editorStore.toggleCreativeAssistant();
 };
+
+// When creative assistant is hidden, optionally keep the conversation or reset it
+// For now, we keep the conversation in the component but you could add logic to clear it
 
 const fetchPromptTemplates = async () => {
   try {
@@ -205,7 +229,16 @@ const scrollToBottom = () => {
   });
 };
 
-const sendMessageStream = async (messageContent = null) => {
+// Modify sendMessageStream function to support updating existing messages
+const testUserInput = () => {
+  console.log('[CreativeAssistant] Testing userInput:');
+  console.log('[CreativeAssistant] Current userInput value:', userInput.value);
+  console.log('[CreativeAssistant] Current isLoading state:', isLoading.value);
+  console.log('[CreativeAssistant] Messages count:', messages.value.length);
+};
+
+const sendMessageStream = async (messageContent = null, updateMessageIndex = null) => {
+  console.log('[CreativeAssistant] sendMessageStream called with:', { messageContent, updateMessageIndex, userInput: userInput.value });
   const content = messageContent || userInput.value;
   if (!content.trim()) {
     ElMessage.warning('消息不能为空');
@@ -222,9 +255,13 @@ const sendMessageStream = async (messageContent = null) => {
     return;
   }
 
-  if (isLoading.value) return;
+  if (isLoading.value) {
+    console.log('[CreativeAssistant] Already loading, returning early');
+    return;
+  }
 
   isLoading.value = true;
+  console.log('[CreativeAssistant] Set isLoading to true');
 
   // 如果是新消息（非重新生成），则添加到消息列表
   if (!messageContent) {
@@ -234,7 +271,12 @@ const sendMessageStream = async (messageContent = null) => {
 
   scrollToBottom();
 
-  messages.value.push({ role: 'assistant', content: '正在思考中...' });
+  // 如果是更新现有消息，则更新该消息内容；否则添加新消息
+  if (updateMessageIndex !== null) {
+    messages.value[updateMessageIndex].content = '正在重新思考中...';
+  } else {
+    messages.value.push({ role: 'assistant', content: '正在思考中...' });
+  }
   scrollToBottom();
 
   let processedUserInput = content;
@@ -252,6 +294,7 @@ const sendMessageStream = async (messageContent = null) => {
     } catch (error) {
       console.error('Failed to render user input:', error);
       ElMessage.error('渲染用户输入中的变量失败。');
+      messages.value.pop(); // 移除已添加的"正在思考中..."消息
       messages.value.pop(); // 移除已添加的用户消息
       userInput.value = content; // 恢复用户输入
       isLoading.value = false;
@@ -267,6 +310,7 @@ const sendMessageStream = async (messageContent = null) => {
 
     const payload = {
       message: processedUserInput, // 使用渲染后的用户输入
+      conversation_id: conversationId.value, // Use conversation ID if exists
       history: actualHistory.map(m => ({ role: m.role, content: m.content })),
       prompt_template_id: selectedPromptTemplateId.value,
       ai_model_id: selectedAiModelId.value,
@@ -316,7 +360,10 @@ const sendMessageStream = async (messageContent = null) => {
 
             switch (data.type) {
               case 'conversation_id':
-                // 创作助手侧边栏不需要保存对话ID，因为它是临时的
+                // 保存对话ID以供后续消息使用
+                if (!conversationId.value) {
+                  conversationId.value = data.conversation_id;
+                }
                 break;
 
               case 'content':
@@ -357,10 +404,182 @@ const sendMessageStream = async (messageContent = null) => {
   }
 };
 
-const handleEnter = (e) => {
-  if (e.shiftKey) {
+// Add a new sendMessageStream function based on the working ChatView implementation
+const newSendMessageStream = async (messageContent = null, updateMessageIndex = null) => {
+  const content = messageContent || userInput.value;
+  if (!content.trim()) {
+    ElMessage.warning('消息不能为空');
     return;
   }
+  if (isLoading.value) return;
+
+  // 检查用户输入和提示词模板中是否包含变量，如果包含，则必须有项目上下文
+  const selectedTemplate = promptTemplates.value.find(t => t.id === selectedPromptTemplateId.value);
+  const templateContent = selectedTemplate ? selectedTemplate.content : '';
+  const fullContentToCheck = content + templateContent; // 检查用户输入和模板内容
+
+  if (fullContentToCheck.includes('{{') && !currentProject.value) {
+    ElMessage.warning('您似乎使用了变量，请先在"小说管理"中选择一个项目以正确渲染它们。');
+    return;
+  }
+
+  isLoading.value = true;
+
+  // 如果是新消息（非重新生成），则添加到消息列表
+  if (!messageContent) {
+    messages.value.push({ role: 'user', content });
+    userInput.value = '';
+  }
+
+  scrollToBottom();
+
+  // 如果是更新现有消息，则更新该消息内容；否则添加新消息
+  if (updateMessageIndex !== null) {
+    messages.value[updateMessageIndex].content = '正在重新思考中...';
+  } else {
+    messages.value.push({ role: 'assistant', content: '正在思考中...' });
+  }
+  scrollToBottom();
+
+  let processedUserInput = content;
+
+  // 如果用户输入包含变量且有项目上下文，则先进行渲染
+  if (content.includes('{{') && currentProject.value) {
+    try {
+      const renderPayload = {
+        content: content,
+        project_id: currentProject.value.id,
+      };
+      const response = await axios.post('http://localhost:9009/api/prompts/render', renderPayload);
+      processedUserInput = response.data.rendered_content;
+      console.log('[CreativeAssistant DEBUG] User input rendered to:', processedUserInput);
+    } catch (error) {
+      console.error('Failed to render user input:', error);
+      ElMessage.error('渲染用户输入中的变量失败。');
+      messages.value.pop(); // 移除已添加的AI消息
+      messages.value.pop(); // 移除已添加的用户消息
+      userInput.value = content; // 恢复用户输入
+      isLoading.value = false;
+      return;
+    }
+  }
+
+  try {
+    // Build history excluding the current "正在思考中..." AI message
+    const actualHistory = [...messages.value]; // Create a copy
+    actualHistory.pop(); // Remove the last "正在思考中..." AI message
+    actualHistory.pop(); // Remove the current user message that's being sent
+
+    const payload = {
+      message: processedUserInput, // 使用渲染后的用户输入
+      conversation_id: conversationId.value, // Use conversation ID if exists
+      history: actualHistory.map(m => ({ role: m.role, content: m.content })),
+      prompt_template_id: selectedPromptTemplateId.value,
+      ai_model_id: selectedAiModelId.value,
+      project_id: currentProject.value ? currentProject.value.id : null // 附加项目ID
+    };
+
+    console.log('[CreativeAssistant DEBUG] Sending stream payload:', payload);
+
+    const response = await fetch('http://localhost:9009/api/chat/stream', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    // 当前AI消息的索引
+    const aiMessageIndex = messages.value.length - 1;
+    let aiContent = '';
+
+    // 获取响应流
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+
+    // 处理流式数据
+    while (true) {
+      const { done, value } = await reader.read();
+
+      if (done) {
+        break;
+      }
+
+      // 解码数据块
+      const chunk = decoder.decode(value, { stream: true });
+
+      // 处理SSE格式的数据
+      const lines = chunk.split('\n');
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.substring(6));
+
+            switch (data.type) {
+              case 'conversation_id':
+                // 保存对话ID以供后续消息使用
+                if (!conversationId.value) {
+                  conversationId.value = data.conversation_id;
+                }
+                break;
+
+              case 'content':
+                // 第一次接收到内容时，替换"正在思考中..."
+                if (aiContent === '') {
+                  messages.value[aiMessageIndex].content = data.content;
+                } else {
+                  // 追加内容
+                  messages.value[aiMessageIndex].content += data.content;
+                }
+                aiContent += data.content;
+                scrollToBottom();
+                break;
+
+              case 'error':
+                messages.value[aiMessageIndex].content = data.message;
+                ElMessage.error('AI响应失败');
+                break;
+
+              case 'done':
+                // 流式响应结束
+                break;
+            }
+          } catch (e) {
+            console.error('解析SSE数据失败:', e);
+          }
+        }
+      }
+    }
+
+  } catch (error) {
+    console.error('AI request failed:', error);
+    messages.value[messages.value.length - 1].content = '抱歉，与AI连接时出现错误。';
+    ElMessage.error('AI响应失败');
+  } finally {
+    isLoading.value = false;
+    scrollToBottom();
+  }
+};
+
+const debugSendMessage = () => {
+  console.log('发送按钮被点击了！');
+  newSendMessageStream();
+};
+
+const handleEnter = (e) => {
+  console.log('[CreativeAssistant] handleEnter called with event:', e);
+  console.log('[CreativeAssistant] shiftKey:', e.shiftKey);
+  if (e.shiftKey) {
+    console.log('[CreativeAssistant] Shift key pressed, allowing new line');
+    return;
+  }
+  console.log('[CreativeAssistant] Enter key pressed, calling sendMessageStream');
+  // Use stream API to send message
   sendMessageStream();
 };
 
@@ -374,6 +593,99 @@ const insertIntoEditor = () => {
     ElMessage.success('内容已成功写入编辑器');
   } else {
     ElMessage.error(result.message);
+  }
+};
+
+// Function to clear only the current messages but keep the conversation context
+
+// Function to clear only the current messages but keep the conversation context
+const clearCurrentMessages = () => {
+  ElMessageBox.confirm(
+    '确定要清除当前对话内容吗？这将清除所有消息记录，但保持当前的AI设置继续对话。', 
+    '清除对话确认',
+    {
+      confirmButtonText: '确定清除',
+      cancelButtonText: '取消',
+      type: 'warning',
+    }
+  ).then(() => {
+    // Reset to initial state with just the assistant greeting
+    messages.value = [{ role: 'assistant', content: '你好！有什么可以帮助你的吗？' }];
+    userInput.value = '';
+    ElMessage.success('对话内容已清除');
+  }).catch(() => {
+    // User cancelled
+    ElMessage.info('已取消清除操作');
+  });
+};
+
+// Add a function to start a new conversation
+const startNewConversation = () => {
+  conversationId.value = null;
+  messages.value = [{ role: 'assistant', content: '你好！有什么可以帮助你的吗？' }];
+  userInput.value = '';
+};
+
+// Regenerate AI response
+const regenerateResponse = async (aiMessageIndex) => {
+  // Find the corresponding user question for this AI response
+  const userMessageIndex = aiMessageIndex - 1;
+  if (userMessageIndex < 0 || messages.value[userMessageIndex].role !== 'user') {
+    ElMessage.error('找不到对应的用户提问');
+    return;
+  }
+  const userMessageContent = messages.value[userMessageIndex].content;
+  
+  // Update AI response in place instead of removing it
+  messages.value[aiMessageIndex].content = '正在重新思考中...';
+  
+  // Reuse sendMessageStream logic, but pass historical messages and specify the message index to update
+  await sendMessageStream(userMessageContent, aiMessageIndex);
+};
+
+// Delete specific message
+const deleteMessage = async (messageIndex) => {
+  ElMessageBox.confirm(
+    '确定要删除这条消息吗？此操作不可恢复！', 
+    '删除确认',
+    {
+      confirmButtonText: '确定删除',
+      cancelButtonText: '取消',
+      type: 'warning',
+    }
+  ).then(async () => {
+    try {
+      // If it's a user message, delete the following AI response as well
+      const message = messages.value[messageIndex];
+      if (message.role === 'user' && messageIndex + 1 < messages.value.length) {
+        const nextMessage = messages.value[messageIndex + 1];
+        if (nextMessage.role === 'assistant') {
+          // Delete user message and AI response
+          messages.value.splice(messageIndex, 2);
+          ElMessage.success('消息对已删除');
+          return;
+        }
+      }
+      
+      // Delete single message
+      messages.value.splice(messageIndex, 1);
+      ElMessage.success('消息已删除');
+    } catch (error) {
+      ElMessage.error('删除消息失败');
+      console.error(error);
+    }
+  }).catch(() => {
+    ElMessage.info('已取消删除');
+  });
+};
+
+// Copy message to clipboard
+const copyMessage = async (content) => {
+  try {
+    await navigator.clipboard.writeText(content);
+    ElMessage.success('已复制到剪贴板');
+  } catch (err) {
+    ElMessage.error('复制失败');
   }
 };
 
@@ -488,12 +800,12 @@ onUnmounted(() => {
   margin-bottom: 15px;
   border: 1px solid #dcdfe6;
   border-radius: 4px;
-  padding: 10px;
-  background-color: #fff;
+  padding: 1.5rem 4rem 1.5rem 1.5rem; /* 增加右边距以容纳操作按钮 */
+  background-color: #fafafa;
 }
 
 .message-wrapper {
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
   display: flex;
   flex-direction: row;
   align-items: flex-start;
@@ -532,9 +844,11 @@ onUnmounted(() => {
 }
 
 .message {
-  max-width: 70%;
+  max-width: 75%;
   line-height: 1.6;
   position: relative;
+  border-radius: 18px;
+  overflow: hidden;
 }
 
 .message-user {
@@ -546,21 +860,22 @@ onUnmounted(() => {
 }
 
 .message span, .markdown-body {
-  padding: 0.6rem 1rem;
-  border-radius: 18px;
+  padding: 0.8rem 1.2rem;
   white-space: pre-wrap;
+  display: block;
 }
 
 .message-user span {
-  background-color: #409eff;
+  background: linear-gradient(135deg, #409eff, #5a7eff);
   color: white;
-  border-top-right-radius: 4px;
+  border-radius: 18px 4px 18px 18px;
 }
 
 .message-assistant .markdown-body {
-  background-color: #f0f2f5;
+  background-color: white;
   color: #333;
-  border-top-left-radius: 4px;
+  border-radius: 4px 18px 18px 18px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
 
 .chat-input {
@@ -599,6 +914,27 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   margin-top: 10px;
+}
+
+/* 消息操作按钮 */
+.message-actions {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  display: flex;
+  flex-direction: row;
+  gap: 5px;
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+  background-color: rgba(255, 255, 255, 0.9);
+  border-radius: 20px;
+  padding: 5px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  z-index: 10;
+}
+
+.message:hover .message-actions {
+  opacity: 1;
 }
 
 /* 宽度调整条 */

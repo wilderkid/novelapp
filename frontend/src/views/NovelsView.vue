@@ -1,50 +1,121 @@
 <template>
-  <div class="novels-container">
-    <div class="novels-header">
-      <h2>小说管理</h2>
-      <el-button type="primary" @click="showCreateDialog = true">
-        <el-icon><Plus /></el-icon>
-        新建小说
-      </el-button>
-    </div>
+  <div class="novels-container" role="main" aria-label="小说管理页面">
+    <PageHeader 
+      title="小说管理" 
+      :actions="[
+        { 
+          text: '新建小说', 
+          icon: Plus, 
+          loading: isLoading,
+          handler: () => showCreateDialog = true 
+        },
+        {
+          text: '导入小说',
+          icon: Upload,
+          handler: importNovel
+        }
+      ]"
+    />
 
     <div class="novels-content">
-      <el-table :data="novels" style="width: 100%" table-layout="fixed">
-        <el-table-column prop="title" label="小说标题" min-width="180" show-overflow-tooltip />
-        <el-table-column prop="genre" label="类型" width="80" />
-        <el-table-column prop="author" label="作者" width="100" />
+      <el-table 
+        :data="novels" 
+        style="width: 100%" 
+        table-layout="fixed"
+        v-loading="isLoading"
+        element-loading-text="加载小说数据中..."
+        element-loading-background="rgba(255, 255, 255, 0.8)"
+        aria-label="小说列表"
+        role="table"
+      >
+        <el-table-column prop="title" label="小说标题" show-overflow-tooltip>
+          <template #header>
+            <el-icon><Reading /></el-icon> 小说标题
+          </template>
+        </el-table-column>
+        <el-table-column prop="genre" label="类型" width="80">
+          <template #header>
+            <el-icon><Collection /></el-icon> 类型
+          </template>
+        </el-table-column>
+        <el-table-column prop="author" label="作者" width="100">
+          <template #header>
+            <el-icon><User /></el-icon> 作者
+          </template>
+        </el-table-column>
         <el-table-column prop="wordCount" label="字数" width="90">
+          <template #header>
+            <el-icon><Document /></el-icon> 字数
+          </template>
           <template #default="scope">
             {{ formatWordCount(scope.row.wordCount || scope.row.word_count || 0) }}
           </template>
         </el-table-column>
-        <el-table-column prop="chapterCount" label="章节数" width="80">
+        <el-table-column prop="chapterCount" label="章节数" width="100">
+          <template #header>
+            <el-icon><Tickets /></el-icon> 章节数
+          </template>
           <template #default="scope">
             {{ scope.row.chapterCount || scope.row.chapter_count || 0 }}
           </template>
         </el-table-column>
         <el-table-column prop="created_at" label="创建时间" width="170">
+          <template #header>
+            <el-icon><Clock /></el-icon> 创建时间
+          </template>
           <template #default="scope">
             {{ formatDate(scope.row.created_at) }}
           </template>
         </el-table-column>
         <el-table-column prop="updated_at" label="更新时间" width="170">
+          <template #header>
+            <el-icon><Timer /></el-icon> 更新时间
+          </template>
           <template #default="scope">
-            {{ formatDate(scope.row.updated_at) }}
+            {{ formatDate(scope.row.updated_at || scope.row.created_at) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="220" fixed="right">
+        <el-table-column label="操作" width="280" fixed="right">
+          <template #header>
+            <el-icon><Operation /></el-icon> 操作
+          </template>
           <template #default="scope">
-            <el-button-group>
-              <el-button size="small" @click="openNovel(scope.row)">
+            <el-button-group role="group" aria-label="小说操作按钮组">
+              <el-button 
+                size="small" 
+                @click="openNovel(scope.row)"
+                :loading="activeNovelId === scope.row.id && isLoading"
+                :aria-label="`打开小说 ${scope.row.title}`"
+              >
                 <el-icon><View /></el-icon>
                 打开
               </el-button>
-              <el-button size="small" type="primary" @click="editNovel(scope.row)">
+              <el-button 
+                size="small" 
+                type="primary" 
+                @click="editNovel(scope.row)"
+                :loading="activeNovelId === scope.row.id && isLoading"
+                :aria-label="`编辑小说 ${scope.row.title}`"
+              >
                 <el-icon><Edit /></el-icon>
                 编辑
               </el-button>
-              <el-button size="small" type="danger" @click="confirmDelete(scope.row)">
+              <el-button 
+                size="small" 
+                type="success" 
+                @click="exportNovel(scope.row)"
+                :aria-label="`导出小说 ${scope.row.title}`"
+              >
+                <el-icon><Download /></el-icon>
+                导出
+              </el-button>
+              <el-button 
+                size="small" 
+                type="danger" 
+                @click="confirmDelete(scope.row)"
+                :loading="activeNovelId === scope.row.id && isDeleting"
+                :aria-label="`删除小说 ${scope.row.title}`"
+              >
                 <el-icon><Delete /></el-icon>
                 删除
               </el-button>
@@ -59,13 +130,28 @@
       v-model="showCreateDialog" 
       :title="isEditing ? '编辑小说' : '新建小说'" 
       width="500px"
+      :close-on-click-modal="false"
+      :aria-label="isEditing ? '编辑小说对话框' : '新建小说对话框'"
+      role="dialog"
+      :modal="true"
     >
       <el-form :model="novelForm" label-width="80px">
-        <el-form-item label="小说标题">
-          <el-input v-model="novelForm.title" placeholder="请输入小说标题" />
+        <el-form-item label="小说标题" aria-label="小说标题输入框">
+          <el-input 
+            v-model="novelForm.title" 
+            placeholder="请输入小说标题" 
+            :disabled="isSaving"
+            aria-label="小说标题输入框"
+          />
         </el-form-item>
-        <el-form-item label="小说类型">
-          <el-select v-model="novelForm.genre" placeholder="请选择小说类型" style="width: 100%">
+        <el-form-item label="小说类型" aria-label="小说类型选择框">
+          <el-select 
+            v-model="novelForm.genre" 
+            placeholder="请选择小说类型" 
+            style="width: 100%"
+            :disabled="isSaving"
+            aria-label="小说类型选择框"
+          >
             <el-option label="奇幻" value="奇幻" />
             <el-option label="科幻" value="科幻" />
             <el-option label="悬疑" value="悬疑" />
@@ -74,20 +160,51 @@
             <el-option label="其他" value="其他" />
           </el-select>
         </el-form-item>
-        <el-form-item label="小说描述">
-          <el-input v-model="novelForm.description" type="textarea" rows="3" placeholder="请输入小说描述" />
+        <el-form-item label="小说描述" aria-label="小说描述输入框">
+          <el-input 
+            v-model="novelForm.description" 
+            type="textarea" 
+            rows="3" 
+            placeholder="请输入小说描述" 
+            :disabled="isSaving"
+            aria-label="小说描述输入框"
+          />
         </el-form-item>
-        <el-form-item label="作者">
-          <el-input v-model="novelForm.author" placeholder="请输入作者名称" />
+        <el-form-item label="作者" aria-label="作者输入框">
+          <el-input 
+            v-model="novelForm.author" 
+            placeholder="请输入作者名称" 
+            :disabled="isSaving"
+            aria-label="作者输入框"
+          />
         </el-form-item>
-        <el-form-item label="预计字数">
-          <el-input-number v-model="novelForm.expectedWords" :min="1000" :max="10000000" />
+        <el-form-item label="预计字数" aria-label="预计字数输入框">
+          <el-input-number 
+            v-model="novelForm.expectedWords" 
+            :min="1000" 
+            :max="10000000" 
+            :disabled="isSaving"
+            aria-label="预计字数输入框"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
         <span class="dialog-footer">
-          <el-button @click="showCreateDialog = false">取消</el-button>
-          <el-button type="primary" @click="saveNovel">确定</el-button>
+          <el-button 
+            @click="showCreateDialog = false" 
+            :disabled="isSaving"
+            aria-label="取消按钮"
+          >
+            取消
+          </el-button>
+          <el-button 
+            type="primary" 
+            @click="saveNovel"
+            :loading="isSaving"
+            aria-label="确认保存按钮"
+          >
+            确定
+          </el-button>
         </span>
       </template>
     </el-dialog>
@@ -98,8 +215,9 @@
 import { ref, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, View, Edit, Delete } from '@element-plus/icons-vue'
+import { Plus, View, Edit, Delete, Reading, Collection, User, Document, Tickets, Clock, Timer, Operation, Upload, Download } from '@element-plus/icons-vue'
 import { useProjectStore } from '../stores/projectStore'
+import PageHeader from '../components/PageHeader.vue'
 import axios from 'axios'
 
 // 状态管理
@@ -122,6 +240,12 @@ const novelForm = ref({
 // 小说列表
 const novels = ref([])
 
+// 加载状态
+const isLoading = ref(false)
+const isSaving = ref(false)
+const isDeleting = ref(false)
+const activeNovelId = ref(null)
+
 // 方法
 const formatWordCount = (count) => {
   // 处理undefined、null或0的情况
@@ -135,7 +259,13 @@ const formatWordCount = (count) => {
 }
 
 const formatDate = (dateString) => {
+  if (!dateString) {
+    return '—';
+  }
   const date = new Date(dateString)
+  if (isNaN(date.getTime())) {
+    return '—';
+  }
   // 使用更紧凑的日期格式，避免文字堆叠
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -147,11 +277,18 @@ const formatDate = (dateString) => {
 }
 
 const openNovel = (novel) => {
-  // 设置当前项目
-  projectStore.setCurrentProject(novel)
-  // 跳转到章节管理页面
-  router.push('/chapters')
-  ElMessage.success(`已打开小说: ${novel.title}`)
+  activeNovelId.value = novel.id;
+  isLoading.value = true;
+  try {
+    // 设置当前项目
+    projectStore.setCurrentProject(novel)
+    // 跳转到章节管理页面
+    router.push('/chapters')
+    ElMessage.success(`已打开小说: ${novel.title}`)
+  } finally {
+    isLoading.value = false;
+    activeNovelId.value = null;
+  }
 }
 
 const editNovel = (novel) => {
@@ -166,6 +303,7 @@ const saveNovel = async () => {
     return
   }
 
+  isSaving.value = true;
   try {
     if (isEditing.value) {
       // 更新现有小说 - 调用后端API
@@ -207,6 +345,8 @@ const saveNovel = async () => {
   } catch (error) {
     console.error('保存小说失败:', error)
     ElMessage.error('保存小说失败: ' + (error.response?.data?.detail || error.message))
+  } finally {
+    isSaving.value = false;
   }
 }
 
@@ -222,6 +362,9 @@ const confirmDelete = async (novel) => {
       }
     )
     
+    activeNovelId.value = novel.id;
+    isDeleting.value = true;
+    
     // 调用后端API删除小说
     await axios.delete(`/api/projects/${novel.id}`)
     
@@ -233,6 +376,9 @@ const confirmDelete = async (novel) => {
       console.error('删除小说失败:', error)
       ElMessage.error('删除小说失败: ' + (error.response?.data?.detail || error.message))
     }
+  } finally {
+    isDeleting.value = false;
+    activeNovelId.value = null;
   }
 }
 
@@ -249,6 +395,7 @@ const resetForm = () => {
 
 // 加载小说列表
 const loadNovels = async () => {
+  isLoading.value = true;
   try {
     const response = await axios.get('/api/projects')
     
@@ -264,8 +411,85 @@ const loadNovels = async () => {
   } catch (error) {
     console.error('加载小说列表失败:', error)
     ElMessage.error('加载小说列表失败: ' + (error.response?.data?.detail || error.message))
+  } finally {
+    isLoading.value = false;
   }
 }
+
+const exportNovel = async (novel) => {
+  try {
+    ElMessage.info(`正在导出小说《${novel.title}》，请稍候...`);
+
+    const volumesResponse = await axios.get(`/api/projects/${novel.id}/volumes`);
+    const volumes = volumesResponse.data;
+
+    const volumesWithChapters = [];
+
+    for (const volume of volumes) {
+      const chaptersResponse = await axios.get(`/api/volumes/${volume.id}/chapters`);
+      const chapters = chaptersResponse.data.map(c => ({
+        title: c.title,
+        content: c.content,
+        order: c.order
+      }));
+      volumesWithChapters.push({
+        title: volume.title,
+        order: volume.order,
+        chapters: chapters
+      });
+    }
+
+    const novelData = {
+      title: novel.title,
+      genre: novel.genre,
+      description: novel.description,
+      author: novel.author,
+      expectedWords: novel.expectedWords,
+      volumes: volumesWithChapters
+    };
+
+    const jsonStr = JSON.stringify(novelData, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${novel.title}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    ElMessage.success(`小说《${novel.title}》导出成功`);
+  } catch (error) {
+    console.error('导出小说失败:', error);
+    ElMessage.error('导出小说失败: ' + (error.response?.data?.detail || error.message));
+  }
+};
+
+const importNovel = () => {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const novelData = JSON.parse(event.target.result);
+        await axios.post('/api/projects/import', novelData);
+        ElMessage.success(`小说《${novelData.title}》导入成功`);
+        await loadNovels();
+      } catch (error) {
+        console.error('导入小说失败:', error);
+        ElMessage.error('导入小说失败: ' + (error.response?.data?.detail || error.message));
+      }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+};
 
 // 组件挂载时加载数据和重置表单
 onMounted(async () => {
@@ -282,31 +506,28 @@ onActivated(async () => {
 <style scoped>
 .novels-container {
   padding: 20px;
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-}
-
-.novels-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.novels-header h2 {
-  margin: 0;
+  background-color: #f5f7fa;
 }
 
 .novels-content {
   flex: 1;
   width: 100%;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  padding: 20px;
+  margin-top: 12px;
 }
 
 /* 确保表格占满可用空间 */
 :deep(.el-table) {
   width: 100% !important;
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 /* 确保表格容器占满可用空间 */
@@ -316,7 +537,13 @@ onActivated(async () => {
 
 /* 优化时间列的显示 */
 :deep(.el-table__cell) {
-  padding: 8px 0;
+  padding: 12px 0;
+}
+
+:deep(.el-table th.el-table__cell) {
+  background-color: #f8f9fa;
+  color: #606266;
+  font-weight: 600;
 }
 
 /* 确保时间列文本不会换行 */
@@ -334,7 +561,33 @@ onActivated(async () => {
 }
 
 :deep(.el-button-group .el-button) {
-  padding: 5px 8px;
+  padding: 6px 10px;
   font-size: 12px;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .novels-container {
+    padding: 10px;
+  }
+  
+  .novels-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .novels-header h2 {
+    font-size: 20px;
+  }
+  
+  /* 在小屏幕上隐藏某些列 */
+  :deep(.el-table__header-wrapper),
+  :deep(.el-table__body-wrapper) {
+    overflow-x: auto;
+  }
+  
+  :deep(.el-table) {
+    min-width: 600px;
+  }
 }
 </style>

@@ -10,7 +10,7 @@ import json
 import aiofiles
 import httpx
 from typing import List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from database import SessionLocal, engine, Base
 from sqlalchemy import func
@@ -78,6 +78,68 @@ def get_projects(db: Session = Depends(get_db)):
         project.word_count = sum(c.word_count for c in project.chapters if c.word_count is not None)
     
     return projects
+
+
+
+class ChapterImport(BaseModel):
+    title: str
+    content: str
+    order: int
+
+class VolumeImport(BaseModel):
+    title: str
+    order: int
+    chapters: List[ChapterImport]
+
+class NovelImport(BaseModel):
+    title: str
+    genre: Optional[str] = None
+    description: Optional[str] = None
+    author: Optional[str] = None
+    expected_words: Optional[int] = Field(None, alias='expectedWords')
+    volumes: List[VolumeImport]
+
+@app.post("/api/projects/import", response_model=ProjectResponse)
+def import_project(novel_data: NovelImport, db: Session = Depends(get_db)):
+    """导入新项目"""
+    print("Importing novel data:", novel_data.model_dump_json(indent=2))
+    # 创建项目
+    db_project = Project(
+        title=novel_data.title,
+        genre=novel_data.genre,
+        description=novel_data.description,
+        author=novel_data.author,
+        expected_words=novel_data.expected_words
+    )
+    db.add(db_project)
+    db.commit()
+    db.refresh(db_project)
+
+    # 导入分卷和章节
+    for volume_data in novel_data.volumes:
+        db_volume = Volume(
+            title=volume_data.title,
+            project_id=db_project.id,
+            order=volume_data.order
+        )
+        db.add(db_volume)
+        db.commit()
+        db.refresh(db_volume)
+
+        for chapter_data in volume_data.chapters:
+            db_chapter = Chapter(
+                title=chapter_data.title,
+                content=chapter_data.content,
+                volume_id=db_volume.id,
+                project_id=db_project.id,
+                order=chapter_data.order,
+                word_count=len(chapter_data.content)
+            )
+            db.add(db_chapter)
+            db.commit()
+            db.refresh(db_chapter)
+
+    return db_project
 
 @app.post("/api/projects", response_model=ProjectResponse)
 def create_project(project: ProjectCreate, db: Session = Depends(get_db)):

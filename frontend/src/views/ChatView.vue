@@ -9,6 +9,7 @@
         <el-menu-item v-for="conv in conversations" :key="conv.id" :index="String(conv.id)">
           <template #title>
             <div class="conv-item-content">
+              <el-icon style="margin-right: 8px;"><ChatDotRound /></el-icon>
               <span class="conv-title">{{ conv.title }}</span>
               <div class="conv-actions">
                 <el-button 
@@ -34,25 +35,38 @@
     <!-- 聊天主窗口 -->
     <div class="chat-container">
       <div class="chat-header">
-        <h1>{{ currentConversationId ? '对话中' : '新对话' }}</h1>
+        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+          <h1>{{ currentConversationId ? '对话中' : '新对话' }}</h1>
+          <el-button 
+            type="danger" 
+            size="small" 
+            plain
+            @click="clearConversation"
+            :disabled="!currentConversationId"
+          >
+            <el-icon><Delete /></el-icon>
+            清除对话
+          </el-button>
+        </div>
       </div>
       <div class="chat-messages" ref="messagesContainer">
         <div v-for="(msg, index) in messages" :key="index" class="message-wrapper" :class="`message-wrapper-${msg.role}`">
           <!-- 添加头像 -->
           <div class="avatar" :class="`avatar-${msg.role}`">
-            <svg v-if="msg.role === 'assistant'" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" fill="#4a6cf7"/>
-            </svg>
-            <svg v-else viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" fill="#10b981"/>
-            </svg>
+            <el-icon v-if="msg.role === 'assistant'" :size="24">
+              <ChatLineRound />
+            </el-icon>
+            <el-icon v-else :size="24">
+              <User />
+            </el-icon>
           </div>
           <div class="message" :class="`message-${msg.role}`">
             <div v-if="msg.role === 'assistant'" v-html="renderMarkdown(msg.content)" class="markdown-body"></div>
             <span v-else>{{ msg.content }}</span>
-            <div v-if="msg.role === 'assistant' && !isLoading" class="message-actions">
-              <el-button size="small" circle :icon="CopyDocument" @click="copyMessage(msg.content)"></el-button>
-              <el-button size="small" circle :icon="Refresh" @click="regenerateResponse(index)"></el-button>
+            <div v-if="(msg.role === 'assistant' || msg.role === 'user') && !isLoading" class="message-actions">
+              <el-button v-if="msg.role === 'assistant'" size="small" circle :icon="CopyDocument" @click="copyMessage(msg.content)" title="复制消息"></el-button>
+              <el-button v-if="msg.role === 'assistant'" size="small" circle :icon="Refresh" @click="regenerateResponse(index)" title="重新生成"></el-button>
+              <el-button size="small" circle :icon="Delete" @click="deleteMessage(index)" title="删除消息"></el-button>
             </div>
           </div>
         </div>
@@ -126,7 +140,7 @@ import axios from 'axios';
 import { marked } from 'marked';
 import hljs from 'highlight.js';
 import 'highlight.js/styles/default.css';
-import { CopyDocument, Refresh, Edit, Delete, ChatDotRound, Setting } from '@element-plus/icons-vue';
+import { CopyDocument, Refresh, Edit, Delete, ChatDotRound, Setting, ChatSquare, ChatLineRound, User } from '@element-plus/icons-vue';
 import { useProjectStore } from '@/stores/projectStore';
 
 const projectStore = useProjectStore();
@@ -237,11 +251,47 @@ const regenerateResponse = async (aiMessageIndex) => {
   }
   const userMessageContent = messages.value[userMessageIndex].content;
   
-  // 从界面上移除旧的AI回复
-  messages.value.splice(aiMessageIndex, 1);
+  // 在原地更新AI回复而不是移除它
+  messages.value[aiMessageIndex].content = '正在重新思考中...';
   
-  // 复用sendMessageStream逻辑，但传入历史消息
-  await sendMessageStream(userMessageContent);
+  // 复用sendMessageStream逻辑，但传入历史消息并指定要更新的消息索引
+  await sendMessageStream(userMessageContent, aiMessageIndex);
+};
+
+// 删除指定消息
+const deleteMessage = async (messageIndex) => {
+  ElMessageBox.confirm(
+    '确定要删除这条消息吗？此操作不可恢复！', 
+    '删除确认',
+    {
+      confirmButtonText: '确定删除',
+      cancelButtonText: '取消',
+      type: 'warning',
+    }
+  ).then(async () => {
+    try {
+      // 如果是用户消息，同时删除后面紧跟着的AI回复
+      const message = messages.value[messageIndex];
+      if (message.role === 'user' && messageIndex + 1 < messages.value.length) {
+        const nextMessage = messages.value[messageIndex + 1];
+        if (nextMessage.role === 'assistant') {
+          // 删除用户消息和AI回复
+          messages.value.splice(messageIndex, 2);
+          ElMessage.success('消息对已删除');
+          return;
+        }
+      }
+      
+      // 只删除单条消息
+      messages.value.splice(messageIndex, 1);
+      ElMessage.success('消息已删除');
+    } catch (error) {
+      ElMessage.error('删除消息失败');
+      console.error(error);
+    }
+  }).catch(() => {
+    ElMessage.info('已取消删除');
+  });
 };
 
 
@@ -321,6 +371,33 @@ const startNewChat = () => {
   userInput.value = '';
   selectedPromptTemplateId.value = null; // Clear selected prompt on new chat
   selectedAiModelId.value = null; // Clear selected AI model on new chat
+};
+
+// Function to clear the current conversation context (keeps the conversation ID but clears messages)
+const clearConversation = () => {
+  ElMessageBox.confirm(
+    '确定要清除当前对话内容吗？这将清除所有消息记录，但会保留当前对话的上下文继续对话。', 
+    '清除对话确认',
+    {
+      confirmButtonText: '确定清除',
+      cancelButtonText: '取消',
+      type: 'warning',
+    }
+  ).then(() => {
+    // Keep the conversation ID but clear the messages
+    if (currentConversationId.value) {
+      // Start with a fresh assistant message
+      messages.value = [{ role: 'assistant', content: '好的，我已经清除了之前的对话记录。现在我们可以开始新的对话。' }];
+      userInput.value = '';
+      ElMessage.success('对话内容已清除');
+    } else {
+      // If no conversation exists, start a new one
+      startNewChat();
+    }
+  }).catch(() => {
+    // User cancelled
+    ElMessage.info('已取消清除操作');
+  });
 };
 
 const loadChat = async (convId) => {
@@ -470,7 +547,8 @@ const sendMessage = async (messageContent = null) => {
 };
 
 // 使用流式API发送消息
-const sendMessageStream = async (messageContent = null) => {
+// 修改sendMessageStream函数以支持更新现有消息
+const sendMessageStream = async (messageContent = null, updateMessageIndex = null) => {
   const content = messageContent || userInput.value;
   if (!content.trim()) {
     ElMessage.warning('消息不能为空');
@@ -498,7 +576,12 @@ const sendMessageStream = async (messageContent = null) => {
 
   scrollToBottom();
 
-  messages.value.push({ role: 'assistant', content: '正在思考中...' });
+  // 如果是更新现有消息，则更新该消息内容；否则添加新消息
+  if (updateMessageIndex !== null) {
+    messages.value[updateMessageIndex].content = '正在重新思考中...';
+  } else {
+    messages.value.push({ role: 'assistant', content: '正在思考中...' });
+  }
   scrollToBottom();
 
   let processedUserInput = content;
@@ -678,21 +761,23 @@ const handleEnter = (e) => {
 .chat-view-layout {
   display: flex;
   height: calc(100vh - 40px);
-  background-color: #f9f9f9;
+  background-color: #f5f7fa;
 }
 
 .history-sidebar {
-  width: 240px;
+  width: 260px;
   flex-shrink: 0;
   border-right: 1px solid #e0e0e0;
   background-color: #fff;
   display: flex;
   flex-direction: column;
+  box-shadow: 2px 0 8px rgba(0,0,0,0.05);
 }
 
 .new-chat-button {
   padding: 1rem;
   border-bottom: 1px solid #e0e0e0;
+  background-color: #fafafa;
 }
 .new-chat-button .el-button {
   width: 100%;
@@ -702,6 +787,7 @@ const handleEnter = (e) => {
   flex-grow: 1;
   overflow-y: auto;
   border-right: none;
+  background-color: #fff;
 }
 
 .conv-item-content {
@@ -730,38 +816,46 @@ const handleEnter = (e) => {
   opacity: 1; /* Show on hover */
 }
 
+.history-menu .el-menu-item {
+  border-radius: 6px;
+  margin: 4px 8px;
+}
+
 .chat-container {
   flex-grow: 1;
   display: flex;
   flex-direction: column;
   background-color: #fff;
-  margin: 8px;
-  border: 1px solid #e0e0e0;
+  margin: 12px 12px 12px 0;
   border-radius: 8px;
   overflow: hidden;
+  box-shadow: 0 2px 12px 0 rgba(0,0,0,0.1);
 }
 
 .chat-header {
   padding: 1rem;
-  background-color: #f7f7f7;
-  border-bottom: 1px solid #e0e0e0;
+  background: linear-gradient(135deg, #409eff, #5a7eff);
+  color: white;
   text-align: center;
   flex-shrink: 0;
+  border-radius: 8px 8px 0 0;
 }
 
 .chat-header h1 {
   margin: 0;
   font-size: 1.25rem;
+  font-weight: 500;
 }
 
 .chat-messages {
   flex-grow: 1;
-  padding: 1rem;
+  padding: 1.5rem 4rem 1.5rem 1.5rem; /* 增加右边距以容纳操作按钮 */
   overflow-y: auto;
+  background-color: #fafafa;
 }
 
 .message-wrapper {
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
   display: flex;
   flex-direction: row;
   align-items: flex-start;
@@ -784,6 +878,7 @@ const handleEnter = (e) => {
   justify-content: center;
   margin: 0 8px;
   flex-shrink: 0;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 .avatar svg {
@@ -793,16 +888,22 @@ const handleEnter = (e) => {
 
 .avatar-user {
   order: 2; /* 用户头像在右侧 */
+  background-color: #409eff;
+  color: white;
 }
 
 .avatar-ai {
   order: 1; /* AI头像在左侧 */
+  background-color: #67c23a;
+  color: white;
 }
 
 .message {
-  max-width: 70%;
+  max-width: 75%;
   line-height: 1.6;
   position: relative;
+  border-radius: 18px;
+  overflow: hidden;
 }
 
 .message-user {
@@ -814,32 +915,38 @@ const handleEnter = (e) => {
 }
 
 .message span, .markdown-body {
-  padding: 0.6rem 1rem;
-  border-radius: 18px;
+  padding: 0.8rem 1.2rem;
   white-space: pre-wrap;
+  display: block;
 }
 
 .message-user span {
-  background-color: #409eff;
+  background: linear-gradient(135deg, #409eff, #5a7eff);
   color: white;
-  border-top-right-radius: 4px;
+  border-radius: 18px 4px 18px 18px;
 }
 
 .message-ai .markdown-body {
-  background-color: #f0f2f5;
+  background-color: white;
   color: #333;
-  border-top-left-radius: 4px;
+  border-radius: 4px 18px 18px 18px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
 
 .message-actions {
   position: absolute;
-  right: -40px;
-  top: 8px;
+  right: 10px;
+  top: 10px;
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  flex-direction: row;
+  gap: 5px;
   opacity: 0;
   transition: opacity 0.2s ease-in-out;
+  background-color: rgba(255, 255, 255, 0.9);
+  border-radius: 20px;
+  padding: 5px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  z-index: 10;
 }
 
 .message:hover .message-actions {
@@ -852,6 +959,7 @@ const handleEnter = (e) => {
   gap: 16px;
   margin-bottom: 12px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .control-item {
@@ -861,7 +969,7 @@ const handleEnter = (e) => {
 }
 
 .control-label {
-  font-size: 14px;
+  font-size: 13px;
   color: #606266;
   max-width: 150px;
   white-space: nowrap;
@@ -877,25 +985,52 @@ const handleEnter = (e) => {
 
 .chat-input-area {
   display: flex;
-  flex-direction: column; /* Changed to column to stack elements */
+  flex-direction: column;
   padding: 1rem;
-  border-top: 1px solid #e0e0e0;
-  background-color: #f7f7f7;
+  background-color: #fff;
   flex-shrink: 0;
-}
-
-.prompt-template-selector {
-  margin-bottom: 1rem; /* Space between selector and textarea */
-  width: 100%;
-}
-
-.ai-model-selector {
-  margin-bottom: 1rem; /* Space between selector and textarea */
-  width: 100%;
+  border-top: 1px solid #ebeef5;
 }
 
 .send-button {
-  margin-top: 1rem; /* Space between textarea and send button */
-  align-self: flex-end; /* Align button to the right */
+  margin-top: 1rem;
+  align-self: flex-end;
+  min-width: 80px;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .chat-view-layout {
+    flex-direction: column;
+    height: 100vh;
+  }
+  
+  .history-sidebar {
+    width: 100%;
+    height: 180px;
+    border-right: none;
+    border-bottom: 1px solid #e0e0e0;
+  }
+  
+  .chat-container {
+    margin: 0 0 12px 0;
+  }
+  
+  .message {
+    max-width: 85%;
+  }
+  
+  .input-controls {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .control-item {
+    width: 100%;
+  }
+  
+  .control-label {
+    max-width: 100%;
+  }
 }
 </style>

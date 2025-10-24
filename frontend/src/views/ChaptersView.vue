@@ -210,14 +210,28 @@
           <div class="chapter-list-section">
             <h4>章节列表</h4>
             <el-table :data="getVolumeChapters(currentVolume.id)" style="width: 100%" size="small">
-              <el-table-column type="index" label="序号" width="60" />
-              <el-table-column prop="title" label="章节标题" />
+              <el-table-column type="index" label="序号" width="60">
+                <template #header>
+                  <el-icon><List /></el-icon> 序号
+                </template>
+              </el-table-column>
+              <el-table-column prop="title" label="章节标题">
+                <template #header>
+                  <el-icon><Document /></el-icon> 章节标题
+                </template>
+              </el-table-column>
               <el-table-column prop="wordCount" label="字数" width="100">
+                <template #header>
+                  <el-icon><DocumentCopy /></el-icon> 字数
+                </template>
                 <template #default="scope">
                   {{ formatWordCount(scope.row.wordCount || scope.row.word_count || 0) }}
                 </template>
               </el-table-column>
               <el-table-column prop="updated_at" label="更新时间" width="150">
+                <template #header>
+                  <el-icon><Timer /></el-icon> 更新时间
+                </template>
                 <template #default="scope">
                   {{ formatDate(scope.row.updated_at) }}
                 </template>
@@ -234,7 +248,7 @@
 import { ref, reactive, onMounted, watch, computed, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, View, Edit, Delete } from '@element-plus/icons-vue'
+import { Plus, View, Edit, Delete, List, Document, DocumentCopy, Timer } from '@element-plus/icons-vue'
 import { useEditorStore } from '../stores/editorStore'
 import { useProjectStore } from '../stores/projectStore'
 import UEditorPlus from '../components/UEditorPlus_New.vue'
@@ -1151,14 +1165,16 @@ watch(() => projectStore.currentProject, (newProject) => {
 <style scoped>
 .chapters-container {
   padding: 20px;
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
+  background-color: #f5f7fa;
 }
 
 .content-header {
   margin-bottom: 20px;
+  padding: 10px 0;
 }
 
 .content-main {
@@ -1170,8 +1186,8 @@ watch(() => projectStore.currentProject, (newProject) => {
 
 /* 左侧分卷和章节树形列表 */
 .sidebar {
-  min-width: 200px;
-  max-width: 500px;
+  min-width: 250px;
+  max-width: 400px;
   background-color: white;
   border-radius: 8px;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
@@ -1206,25 +1222,34 @@ watch(() => projectStore.currentProject, (newProject) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  background-color: #fafafa;
+  border-radius: 8px 8px 0 0;
 }
 
 .sidebar-header h3 {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
+  color: #303133;
 }
 
 .tree-container {
   flex: 1;
   padding: 10px;
   overflow-y: auto;
+  background-color: #fff;
 }
 
 .tree-node {
   display: flex;
   align-items: center;
   width: 100%;
-  padding-right: 8px;
+  padding: 5px 8px;
+  border-radius: 4px;
+}
+
+.tree-node:hover {
+  background-color: #f5f7fa;
 }
 
 .node-label {
@@ -1236,7 +1261,7 @@ watch(() => projectStore.currentProject, (newProject) => {
 
 .node-actions {
   display: none;
-  gap: 2px; /* Reduced gap */
+  gap: 4px; /* Reduced gap */
   align-items: center;
 }
 
@@ -1244,6 +1269,7 @@ watch(() => projectStore.currentProject, (newProject) => {
 .node-actions :deep(.el-button) {
   padding: 4px;
   margin: 0;
+  min-height: auto;
 }
 
 .tree-node:hover .node-actions {
@@ -1285,6 +1311,7 @@ watch(() => projectStore.currentProject, (newProject) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  background-color: #fafafa;
 }
 
 .title-input {
@@ -1313,6 +1340,9 @@ watch(() => projectStore.currentProject, (newProject) => {
   justify-content: center;
   align-items: center;
   height: 100%;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
 }
 
 .volume-detail {
@@ -1367,6 +1397,7 @@ watch(() => projectStore.currentProject, (newProject) => {
 /* 树形组件样式调整 */
 :deep(.el-tree-node__content) {
   height: 36px;
+  padding: 0 5px;
 }
 
 :deep(.el-tree-node__expand-icon) {
@@ -1391,7 +1422,6 @@ watch(() => projectStore.currentProject, (newProject) => {
   background-color: #f5f7fa;
 }
 
-
 :deep(.el-tree-node.is-drop-inner > .el-tree-node__content) {
   background-color: #e6f7ff;
   border: 1px dashed #1890ff;
@@ -1400,5 +1430,37 @@ watch(() => projectStore.currentProject, (newProject) => {
 
 :deep(.el-tree-node.is-drop-inner > .el-tree-node__content .el-tree-node__expand-icon) {
   color: #1890ff;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .chapters-container {
+    padding: 10px;
+  }
+  
+  .content-main {
+    flex-direction: column;
+    height: auto;
+  }
+  
+  .sidebar {
+    min-width: unset;
+    max-width: unset;
+    width: 100%;
+  }
+  
+  .editor-area {
+    min-height: 500px;
+  }
+  
+  .editor-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 15px;
+  }
+  
+  .title-input {
+    width: 100%;
+  }
 }
 </style>

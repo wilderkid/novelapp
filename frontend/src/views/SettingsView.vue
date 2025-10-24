@@ -3,7 +3,11 @@
     <h2>项目设置</h2>
 
     <el-tabs v-model="activeTab">
-      <el-tab-pane label="基本信息" name="basic">
+      <el-tab-pane name="basic">
+        <template #label>
+          <el-icon><InfoFilled /></el-icon>
+          基本信息
+        </template>
         <el-form :model="projectInfo" label-width="120px" class="settings-form">
           <el-form-item label="项目名称">
             <el-input v-model="projectInfo.title" />
@@ -38,7 +42,11 @@
         </el-form>
       </el-tab-pane>
 
-      <el-tab-pane label="AI设置" name="ai">
+      <el-tab-pane name="ai">
+        <template #label>
+          <el-icon><Cpu /></el-icon>
+          AI设置
+        </template>
         <el-form :model="aiSettings" label-width="120px" class="settings-form">
           <el-form-item label="API地址">
             <el-input v-model="aiSettings.apiUrl" placeholder="请输入AI API地址" />
@@ -75,7 +83,11 @@
         </el-form>
       </el-tab-pane>
 
-      <el-tab-pane label="编辑器设置" name="editor">
+      <el-tab-pane name="editor">
+        <template #label>
+          <el-icon><EditPen /></el-icon>
+          编辑器设置
+        </template>
         <el-form :model="editorSettings" label-width="120px" class="settings-form">
           <el-form-item label="字体大小">
             <el-input-number v-model="editorSettings.fontSize" :min="12" :max="24" />
@@ -109,7 +121,11 @@
         </el-form>
       </el-tab-pane>
 
-      <el-tab-pane label="导出设置" name="export">
+      <el-tab-pane name="export">
+        <template #label>
+          <el-icon><Download /></el-icon>
+          导出设置
+        </template>
         <el-form :model="exportSettings" label-width="120px" class="settings-form">
           <el-form-item label="默认导出格式">
             <el-radio-group v-model="exportSettings.defaultFormat">
@@ -153,6 +169,7 @@
 <script setup>
 import { ref, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
+import { InfoFilled, Cpu, EditPen, Download } from '@element-plus/icons-vue'
 
 // 当前选中的标签页
 const activeTab = ref('basic')
@@ -241,13 +258,50 @@ const saveExportSettings = () => {
 <style scoped>
 .settings-container {
   padding: 20px;
+  background-color: #f5f7fa;
+  min-height: 100vh;
 }
 
 .settings-container h2 {
   margin-bottom: 20px;
+  color: #303133;
+  font-weight: 600;
 }
 
 .settings-form {
-  max-width: 600px;
+  max-width: 800px;
+  background-color: #fff;
+  padding: 25px;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px 0 rgba(0,0,0,0.1);
+}
+
+/* 标签页样式优化 */
+:deep(.el-tabs__header) {
+  margin-bottom: 25px;
+}
+
+:deep(.el-tabs__nav-wrap::after) {
+  height: 1px;
+}
+
+:deep(.el-form-item) {
+  margin-bottom: 22px;
+}
+
+:deep(.el-form-item__label) {
+  color: #606266;
+  font-weight: 500;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .settings-container {
+    padding: 10px;
+  }
+  
+  .settings-form {
+    padding: 15px;
+  }
 }
 </style>

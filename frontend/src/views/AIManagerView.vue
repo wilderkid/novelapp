@@ -181,14 +181,28 @@
               <el-button type="text" @click="openAddModelModal(provider)">添加模型</el-button>
             </div>
             <el-table :data="provider.models" stripe class="model-table">
-              <el-table-column prop="name" label="模型名称"></el-table-column>
-              <el-table-column prop="model_identifier" label="模型ID"></el-table-column>
+              <el-table-column prop="name" label="模型名称">
+                <template #header>
+                  <el-icon><Setting /></el-icon> 模型名称
+                </template>
+              </el-table-column>
+              <el-table-column prop="model_identifier" label="模型ID">
+                <template #header>
+                  <el-icon><Key /></el-icon> 模型ID
+                </template>
+              </el-table-column>
               <el-table-column label="状态">
+                <template #header>
+                  <el-icon><SuccessFilled /></el-icon> 状态
+                </template>
                 <template #default="{ row }">
                   <el-tag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '已启用' : '已禁用' }}</el-tag>
                 </template>
               </el-table-column>
               <el-table-column label="操作" width="180">
+                <template #header>
+                  <el-icon><Operation /></el-icon> 操作
+                </template>
                 <template #default="{ row }">
                   <el-button-group>
                     <el-tooltip content="查看" placement="top">
@@ -214,7 +228,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Search, View, Edit, Delete, Warning, Plus, Minus } from '@element-plus/icons-vue';
+import { Search, View, Edit, Delete, Warning, Plus, Minus, Setting, Key, SuccessFilled, Operation } from '@element-plus/icons-vue';
 import { useProjectStore } from '../stores/projectStore';
 import * as aiService from '../services/aiService';
 
@@ -563,14 +577,17 @@ const deleteModel = async (model) => {
 .ai-manager-view {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  min-height: 100vh;
+  background-color: #f5f7fa;
 }
 .view-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 20px;
+  padding: 15px 20px;
   border-bottom: 1px solid #dcdfe6;
+  background-color: #fff;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 .header-actions {
   display: flex;
@@ -583,6 +600,7 @@ const deleteModel = async (model) => {
 .view-content {
   padding: 20px;
   background-color: #f5f7fa;
+  flex: 1;
   overflow-y: auto;
 }
 .provider-card {
@@ -591,6 +609,10 @@ const deleteModel = async (model) => {
   border: 1px solid #e4e7ed;
   margin-bottom: 20px;
   box-shadow: 0 2px 12px 0 rgba(0,0,0,0.1);
+  transition: box-shadow 0.3s ease;
+}
+.provider-card:hover {
+  box-shadow: 0 4px 16px 0 rgba(0,0,0,0.15);
 }
 .provider-header {
   display: flex;
@@ -598,40 +620,52 @@ const deleteModel = async (model) => {
   align-items: center;
   padding: 15px 20px;
   border-bottom: 1px solid #e4e7ed;
+  background-color: #fafafa;
+  border-radius: 8px 8px 0 0;
 }
 .provider-name {
   font-size: 1.2em;
   font-weight: bold;
+  color: #303133;
 }
 .provider-body {
   padding: 20px;
 }
 .model-section {
   margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #ebeef5;
 }
 .model-list-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: 15px;
 }
 .model-list-header h4 {
   margin: 0;
+  color: #303133;
+  font-size: 16px;
 }
 .url-preview {
   margin-top: 8px;
-  padding: 8px;
-  background-color: #f5f7fa;
+  padding: 10px;
+  background-color: #f0f9ff;
+  border-left: 4px solid #409eff;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 13px;
 }
 .url-preview p {
-  margin: 4px 0;
+  margin: 5px 0;
 }
 .warning-text {
   color: #e6a23c;
   display: flex;
   align-items: center;
+  background-color: #fdf6ec;
+  padding: 8px;
+  border-radius: 4px;
+  margin-top: 8px;
 }
 .warning-text .el-icon {
   margin-right: 4px;
@@ -639,6 +673,7 @@ const deleteModel = async (model) => {
 
 .fetched-models-section {
   margin-top: 10px;
+  padding: 10px 0;
 }
 .fetched-models-header {
   display: flex;
@@ -648,6 +683,7 @@ const deleteModel = async (model) => {
 }
 .fetched-models-header h4 {
   margin: 0;
+  color: #303133;
 }
 .fetched-models-list {
   max-height: 200px;
@@ -655,17 +691,61 @@ const deleteModel = async (model) => {
   border: 1px solid #dcdfe6;
   border-radius: 4px;
   padding: 10px;
+  background-color: #fafafa;
 }
 .fetched-model-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 5px 0;
+  padding: 8px 0;
+  border-bottom: 1px solid #ebeef5;
+}
+.fetched-model-item:last-child {
+  border-bottom: none;
 }
 .manual-add-form {
-  margin-top: 10px;
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #ebeef5;
 }
 .model-search-input {
   margin-bottom: 10px;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .view-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 15px;
+  }
+  
+  .header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .search-input {
+    width: 100%;
+  }
+  
+  .provider-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 15px;
+  }
+  
+  .provider-actions {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+  }
+}
+
+/* 表格样式优化 */
+:deep(.model-table) {
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 </style>

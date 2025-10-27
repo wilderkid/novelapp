@@ -73,14 +73,16 @@ jobs:
         pip install pytest pytest-cov
     
     - name: Run backend tests
+      working-directory: ./backend
       env:
         DATABASE_URL: postgresql://postgres:postgres@localhost:5432/storyforge_test
-      run: pytest -v backend/ --cov=backend --cov-report=xml
+      run: |
+        pytest -v --cov=./ --cov-report=xml
     
     - name: Upload coverage reports
       uses: codecov/codecov-action@v4
       with:
-        file: ./coverage.xml
+        file: ./backend/coverage.xml
         flags: backend
         name: backend-coverage
 

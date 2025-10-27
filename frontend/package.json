@@ -10,6 +10,7 @@
     "build": "npm run build:vite && npm run build:electron",
     "build:vite": "vite build",
     "build:electron": "electron-builder",
+    "lint": "eslint . --ext .vue,.js,.cjs,.mjs --fix",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -30,6 +31,8 @@
     "concurrently": "^8.2.0",
     "electron": "^25.6.0",
     "electron-builder": "^24.6.3",
+    "eslint": "^9.38.0",
+    "eslint-plugin-vue": "^10.5.1",
     "vite": "^4.4.9",
     "vite-plugin-mock": "^3.0.2",
     "wait-on": "^7.0.1"

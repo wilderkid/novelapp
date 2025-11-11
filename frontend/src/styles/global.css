@@ -1,11 +1,29 @@
+:root {
+  /* 主色调 */
+  --primary-color: #4a90e2; /* 清新的蓝色 */
+  --primary-color-light: #e8f0fe;
+  --primary-color-dark: #3a7bc8;
 
+  /* 辅助色 */
+  --success-color: #52c41a;
+  --warning-color: #faad14;
+  --error-color: #f5222d;
 
-
+  /* 中性色 */
+  --text-color-primary: #333333;
+  --text-color-secondary: #666666;
+  --text-color-placeholder: #bbbbbb;
+  --border-color: #e8e8e8;
+  --divider-color: #f0f0f0;
+  --bg-color-base: #f8f9fa; /* 页面背景色 */
+  --bg-color-card: #ffffff; /* 卡片/容器背景色 */
+  --bg-color-hover: #f1f3f5;
+}
 
 /* 全局样式重置 */
 * {
   box-sizing: border-box;
-  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
 body {
@@ -14,12 +32,11 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
                'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   font-size: 14px;
-  color: #303133;
-  background-color: #f5f7fa;
+  color: var(--text-color-primary);
+  background-color: var(--bg-color-base);
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  transition: background-color 0.3s ease;
 }
 
 /* 滚动条样式 */
@@ -34,28 +51,28 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #dcdfe6;
+  background: var(--border-color);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #c0c4cc;
+  background: #a9aeb8;
 }
 
 /* 链接样式 */
 a {
-  color: #409eff;
+  color: var(--primary-color);
   text-decoration: none;
   transition: color 0.3s;
 }
 
 a:hover {
-  color: #3a8ee6;
+  color: var(--primary-color-dark);
 }
 
 /* 选中文本样式 */
 ::selection {
-  background-color: rgba(64, 158, 255, 0.2);
+  background-color: var(--primary-color-light);
 }
 
 /* 按钮通用样式 */
@@ -76,52 +93,52 @@ a:hover {
 }
 
 .btn-primary {
-  background-color: #409eff;
+  background-color: var(--primary-color);
   color: white;
-  border-color: #409eff;
+  border-color: var(--primary-color);
 }
 
 .btn-primary:hover {
-  background-color: #3a8ee6;
-  border-color: #3a8ee6;
+  background-color: var(--primary-color-dark);
+  border-color: var(--primary-color-dark);
   color: white;
 }
 
 .btn-secondary {
-  background-color: #fafafa;
-  color: #303133;
-  border-color: #dcdfe6;
+  background-color: var(--bg-color-card);
+  color: var(--text-color-primary);
+  border-color: var(--border-color);
 }
 
 .btn-secondary:hover {
-  background-color: #dcdfe6;
-  color: #303133;
+  background-color: var(--bg-color-hover);
+  color: var(--text-color-primary);
 }
 
 /* 卡片样式 */
 .card {
-  background-color: #ffffff;
+  background-color: var(--bg-color-card);
   border-radius: 8px;
-  box-shadow: 0 2px 12px 0 rgba(0,0,0,0.1);
-  border: 1px solid #e4e7ed;
+  box-shadow: 0 2px 12px 0 rgba(0,0,0,0.06);
+  border: 1px solid var(--border-color);
   overflow: hidden;
   transition: box-shadow 0.3s ease;
 }
 
 .card:hover {
-  box-shadow: 0 4px 16px 0 rgba(0,0,0,0.15);
+  box-shadow: 0 4px 16px 0 rgba(0,0,0,0.1);
 }
 
 /* 标题样式 */
 .title {
-  color: #303133;
+  color: var(--text-color-primary);
   font-size: 18px;
   font-weight: 600;
   margin: 0 0 16px 0;
 }
 
 .subtitle {
-  color: #606266;
+  color: var(--text-color-secondary);
   font-size: 16px;
   font-weight: 500;
   margin: 0 0 8px 0;
@@ -130,7 +147,7 @@ a:hover {
 /* 分割线 */
 .divider {
   height: 1px;
-  background-color: #dcdfe6;
+  background-color: var(--divider-color);
   margin: 16px 0;
 }
 
@@ -147,23 +164,23 @@ a:hover {
 }
 
 .tag-primary {
-  background-color: #ecf5ff;
-  color: #409eff;
+  background-color: var(--primary-color-light);
+  color: var(--primary-color);
 }
 
 .tag-success {
-  background-color: rgba(103, 194, 58, 0.1);
-  color: #67c23a;
+  background-color: rgba(82, 196, 26, 0.1);
+  color: var(--success-color);
 }
 
 .tag-warning {
-  background-color: rgba(230, 162, 60, 0.1);
-  color: #e6a23c;
+  background-color: rgba(250, 173, 20, 0.1);
+  color: var(--warning-color);
 }
 
 .tag-danger {
-  background-color: rgba(245, 108, 108, 0.1);
-  color: #f56c6c;
+  background-color: rgba(245, 34, 45, 0.1);
+  color: var(--error-color);
 }
 
 /* 加载动画 */
@@ -171,9 +188,9 @@ a:hover {
   display: inline-block;
   width: 20px;
   height: 20px;
-  border: 3px solid #ecf5ff;
+  border: 3px solid var(--primary-color-light);
   border-radius: 50%;
-  border-top-color: #409eff;
+  border-top-color: var(--primary-color);
   animation: spin 1s linear infinite;
 }
 
@@ -192,7 +209,7 @@ a:hover {
 .tooltip .tooltip-text {
   visibility: hidden;
   width: 120px;
-  background-color: #303133;
+  background-color: var(--text-color-primary);
   color: #ffffff;
   text-align: center;
   border-radius: 6px;

@@ -412,7 +412,14 @@ def delete_ai_model(model_id: int, db: Session = Depends(get_db)):
 def get_all_ai_models(db: Session = Depends(get_db)):
     """获取所有AI模型（包括其提供商信息）"""
     # Get all models from all providers
-    models = db.query(AIModel).join(AIProvider).all()
+    # 使用 joinedload 预加载 provider 关系，并直接在查询中过滤
+    models = (
+        db.query(AIModel)
+        .join(AIProvider)
+        .filter(AIModel.enabled == True, AIProvider.enabled == True)
+        .options(joinedload(AIModel.provider))
+        .all()
+    )
     return models
 
 
@@ -819,6 +826,7 @@ class ChatRequest(BaseModel):
     prompt_template_id: Optional[int] = None
     ai_model_id: Optional[int] = None
     resources: Optional[dict] = None
+    proxy_url: Optional[str] = None
 
 @app.post("/api/chat")
 def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
@@ -919,6 +927,11 @@ def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
                         "max_tokens": selected_ai_model.max_tokens,
                     }
 
+                    # Check if this is a thinking model and add enable_thinking parameter
+                    is_thinking_model = "thinking" in selected_ai_model.model_identifier.lower() or "qwen" in selected_ai_model.model_identifier.lower()
+                    if is_thinking_model:
+                        payload["extra_body"] = {"enable_thinking": True}
+
                     # Determine the correct endpoint URL
                     # For most OpenAI-compatible APIs, it's chat/completions
                     api_endpoint = f"{base_url.rstrip('/')}/chat/completions"
@@ -943,11 +956,13 @@ def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
 
                     # Make the HTTP request to the AI provider
                     import requests
+                    proxies = {"http://": request.proxy_url, "https://": request.proxy_url} if request.proxy_url else None
                     response = requests.post(
                         api_endpoint,
                         json=payload,
                         headers=headers,
-                        timeout=30.0  # 30 second timeout
+                        timeout=30.0,  # 30 second timeout
+                        proxies=proxies
                     )
 
                     print(f"响应状态码: {response.status_code}")
@@ -1100,6 +1115,9 @@ def chat_with_ai_stream(request: ChatRequest, db: Session = Depends(get_db)):
         base_url = selected_ai_provider.base_url or "https://api.openai.com/v1"
         api_key = selected_ai_provider.api_key
         api_endpoint = f"{base_url.rstrip('/')}/chat/completions"
+        
+        print(f"[API请求] 完整的API端点: {api_endpoint}")
+        print(f"[API请求] 基础URL: {base_url}")
 
         headers = {
             "Content-Type": "application/json",
@@ -1115,17 +1133,50 @@ def chat_with_ai_stream(request: ChatRequest, db: Session = Depends(get_db)):
             "stream": True  # 启用流式响应
         }
 
+        # Check if this is a thinking model and add enable_thinking parameter
+        is_thinking_model = "thinking" in selected_ai_model.model_identifier.lower() or "qwen" in selected_ai_model.model_identifier.lower()
+        if is_thinking_model:
+            payload["extra_body"] = {"enable_thinking": True}
+
         # 使用httpx进行异步请求，支持流式响应
         import httpx
+        import os
 
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
+            # 配置代理 - 使用 httpx 的 proxy 参数（单数形式）
+            client_kwargs = {"timeout": 60.0}
+            
+            if request.proxy_url:
+                # 用户手动配置了代理
+                client_kwargs["proxy"] = request.proxy_url
+                print(f"[代理配置] 使用手动配置的代理: {request.proxy_url}")
+            else:
+                # 尝试使用系统代理设置
+                system_proxy = os.environ.get('HTTP_PROXY') or os.environ.get('http_proxy') or \
+                               os.environ.get('HTTPS_PROXY') or os.environ.get('https_proxy')
+                if system_proxy:
+                    client_kwargs["proxy"] = system_proxy
+                    print(f"[代理配置] 使用系统代理: {system_proxy}")
+                else:
+                    # 在 Windows 上，httpx 默认会尝试使用系统代理
+                    # 我们设置 trust_env=True 来启用这个行为
+                    client_kwargs["trust_env"] = True
+                    print("[代理配置] 使用系统默认代理设置")
+
+            print(f"[HTTP请求] 准备发送请求到: {api_endpoint}")
+            print(f"[HTTP请求] 请求头: {headers}")
+            print(f"[HTTP请求] 请求体: {json.dumps(payload, ensure_ascii=False)[:500]}")
+            
+            async with httpx.AsyncClient(**client_kwargs) as client:
                 async with client.stream(
                     "POST",
                     api_endpoint,
                     json=payload,
                     headers=headers
                 ) as response:
+                    print(f"[HTTP响应] 状态码: {response.status_code}")
+                    print(f"[HTTP响应] 响应头: {dict(response.headers)}")
+                    
                     if response.status_code != 200:
                         error_text = await response.aread()
                         error_msg = f"AI服务调用失败。状态码: {response.status_code}, 详情: {error_text.decode()}"
@@ -1141,32 +1192,84 @@ def chat_with_ai_stream(request: ChatRequest, db: Session = Depends(get_db)):
                         db.commit()
                         return
 
-                    # 处理流式响应
+                    # --- AI响应适配器 ---
+                    class AIResponseAdapter:
+                        def parse(self, delta):
+                            raise NotImplementedError
+
+                    class DefaultAdapter(AIResponseAdapter):
+                        def parse(self, delta):
+                            thinking_chunk = delta.get("reasoning_content")
+                            content_chunk = delta.get("content")
+                            return thinking_chunk, content_chunk
+
+                    class ReasoningAdapter(AIResponseAdapter):
+                        def parse(self, delta):
+                            thinking_chunk = delta.get("reasoning")
+                            content_chunk = delta.get("content")
+                            return thinking_chunk, content_chunk
+
+                    def get_adapter(model_name, sample_delta):
+                        # 优先基于样本内容判断
+                        if "reasoning" in sample_delta:
+                            print("[适配器] 检测到 'reasoning' 字段，使用 ReasoningAdapter")
+                            return ReasoningAdapter()
+                        if "reasoning_content" in sample_delta:
+                            print("[适配器] 检测到 'reasoning_content' 字段，使用 DefaultAdapter")
+                            return DefaultAdapter()
+                        
+                        # 如果样本中没有特定字段，则基于模型名称判断（作为备用方案）
+                        if "glm" in model_name.lower() or "zhipu" in model_name.lower():
+                            print(f"[适配器] 模型名称 '{model_name}' 包含 'glm' 或 'zhipu'，使用 ReasoningAdapter")
+                            return ReasoningAdapter()
+                        
+                        print(f"[适配器] 未匹配到特定适配器，使用 DefaultAdapter")
+                        return DefaultAdapter()
+
+                    # --- 流式处理 ---
+                    adapter = None
+                    line_count = 0
                     async for line in response.aiter_lines():
                         if line:
-                            # OpenAI的流式响应以"data: "开头
+                            line_count += 1
+                            print(f"[流式响应 #{line_count}] 原始行: {line[:200]}")
+
                             if line.startswith("data: "):
-                                data_str = line[6:]  # 移除"data: "前缀
-
-                                # 检查是否是结束标记
+                                data_str = line[6:]
                                 if data_str.strip() == "[DONE]":
+                                    print("[流式响应] 收到结束标记 [DONE]")
                                     break
-
+                                
                                 try:
                                     data = json.loads(data_str)
+                                    print(f"[流式响应] 解析的JSON: {json.dumps(data, ensure_ascii=False)[:300]}")
 
-                                    # 提取内容片段
                                     if "choices" in data and len(data["choices"]) > 0:
                                         delta = data["choices"][0].get("delta", {})
-                                        if "content" in delta:
-                                            content_chunk = delta["content"]
-                                            ai_reply_content += content_chunk
+                                        print(f"[流式响应] Delta内容: {delta}")
 
-                                            # 发送内容片段到前端
+                                        # 在第一次收到delta时，动态选择适配器
+                                        if adapter is None:
+                                            adapter = get_adapter(selected_ai_model.model_identifier, delta)
+
+                                        thinking_chunk, content_chunk = adapter.parse(delta)
+
+                                        # 统一处理思考过程
+                                        if thinking_chunk:
+                                            print(f"[流式响应] 发送思考内容: {thinking_chunk[:100]}")
+                                            yield f"data: {json.dumps({'type': 'thinking', 'content': thinking_chunk})}\n\n"
+                                        
+                                        # 统一处理最终回复
+                                        if content_chunk:
+                                            print(f"[流式响应] 发送回复内容: {content_chunk}")
+                                            ai_reply_content += content_chunk
                                             yield f"data: {json.dumps({'type': 'content', 'content': content_chunk})}\n\n"
-                                except json.JSONDecodeError:
-                                    # 忽略无法解析的JSON行
+                                        
+                                except json.JSONDecodeError as e:
+                                    print(f"[流式响应] JSON解析失败: {e}, 原始数据: {data_str[:200]}")
                                     pass
+                    
+                    print(f"[流式响应] 总共收到 {line_count} 行，最终回复内容长度: {len(ai_reply_content)}")
 
                     # 流式响应结束，保存完整的AI回复到数据库
                     ai_message = Message(

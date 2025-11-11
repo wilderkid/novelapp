@@ -78,6 +78,10 @@ class AIModelUpdate(AIModelBase):
 class AIModelResponse(AIModelBase):
     id: int
     provider_id: int
+    provider: "AIProviderInModelResponse"
+
+    class Config:
+        from_attributes = True
 
 # AI提供商相关模式
 class AIProviderBase(BaseSchema):
@@ -97,6 +101,12 @@ class AIProviderResponse(AIProviderBase):
     id: int
     is_system: bool
     models: List[AIModelResponse] = []
+
+class AIProviderInModelResponse(AIProviderBase):
+    id: int
+
+    class Config:
+        from_attributes = True
 
 
 # 提示词模板相关模式
@@ -219,6 +229,10 @@ class MessageResponse(MessageBase):
     class Config:
         orm_mode = True
 
+# 更新模型以支持循环引用
+AIModelResponse.model_rebuild()
+AIProviderResponse.model_rebuild()
+
 # Schemas for Conversation
 class ConversationBase(BaseModel):
     title: str
@@ -235,6 +249,18 @@ class ConversationResponse(ConversationBase):
 
     class Config:
         orm_mode = True
+
+
+
+class ChatRequest(BaseModel):
+    message: str
+    project_id: Optional[int] = None
+    conversation_id: Optional[int] = None
+    history: List[dict] = []
+    prompt_template_id: Optional[int] = None
+    ai_model_id: Optional[int] = None
+    resources: Optional[dict] = None
+    proxy_url: Optional[str] = None
 
 
 

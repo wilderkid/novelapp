@@ -134,6 +134,27 @@
       </template>
     </el-dialog>
 
+    <!-- 编辑模型对话框 -->
+    <el-dialog v-model="editModelDialogVisible" title="编辑模型" width="500px">
+      <el-form :model="editModelForm" :rules="modelEditFormRules" ref="editModelFormRef" label-position="top">
+        <el-form-item label="模型名称" prop="name">
+          <el-input v-model="editModelForm.name" placeholder="模型在UI中显示的名称"></el-input>
+        </el-form-item>
+        <el-form-item label="模型ID" prop="model_identifier">
+          <el-input v-model="editModelForm.model_identifier" placeholder="API中使用的模型ID"></el-input>
+        </el-form-item>
+        <el-form-item label="状态" prop="enabled">
+           <el-switch v-model="editModelForm.enabled" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="editModelDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="handleUpdateModel">确定</el-button>
+        </span>
+      </template>
+    </el-dialog>
+
     <el-main class="view-content">
       <div v-for="provider in filteredProviders" :key="provider.id" class="provider-card">
         <div class="provider-header">
@@ -386,8 +407,8 @@ onMounted(() => {
 
 const updateProviderStatus = async (provider) => {
   try {
-    // 仅更新 enabled 字段，其他字段保持不变
-    await aiService.updateProvider(provider.id, { enabled: provider.enabled });
+    // 传递完整的提供商数据以进行更新
+    await aiService.updateProvider(provider.id, provider);
     ElMessage.success(`提供商 ${provider.name} 状态已更新`);
   } catch (error) {
     ElMessage.error('更新提供商状态失败');
@@ -571,6 +592,36 @@ const deleteModel = async (model) => {
   }
 };
 
+// --- 编辑模型 ---
+const editModelDialogVisible = ref(false);
+const editModelFormRef = ref(null);
+const editModelForm = ref({});
+const modelEditFormRules = {
+  name: [{ required: true, message: '请输入模型名称', trigger: 'blur' }],
+  model_identifier: [{ required: true, message: '请输入模型ID', trigger: 'blur' }],
+};
+
+const openEditModelModal = (model) => {
+  editModelForm.value = { ...model };
+  editModelDialogVisible.value = true;
+};
+
+const handleUpdateModel = async () => {
+  if (!editModelFormRef.value) return;
+  await editModelFormRef.value.validate(async (valid) => {
+    if (valid) {
+      try {
+        await aiService.updateModel(editModelForm.value.id, editModelForm.value);
+        ElMessage.success('模型更新成功');
+        editModelDialogVisible.value = false;
+        fetchProviders(); // Reload all data
+      } catch (error) {
+        ElMessage.error('更新模型失败');
+        console.error(error);
+      }
+    }
+  });
+};
 </script>
 
 <style scoped>

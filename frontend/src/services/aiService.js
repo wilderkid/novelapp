@@ -12,33 +12,37 @@ export const processOpenAIUrl = (userProvidedUrl) => {
     };
   }
 
-  // 规则1：直接端点模式（特征: 包含 #）
-  if (userProvidedUrl.includes('#')) {
-    const baseUrl = userProvidedUrl.split('#')[0];
+  // 规则1：完整URL模式（以 # 结尾）
+  if (userProvidedUrl.endsWith('#')) {
+    const baseUrl = userProvidedUrl.slice(0, -1); // 移除 #
+    // 提取 chat 之前的部分作为模型端点
+    const chatIndex = baseUrl.indexOf('/chat');
+    const modelsEndpoint = chatIndex !== -1 ? baseUrl.substring(0, chatIndex) + '/models' : '';
+    
     return {
       chatCompletionEndpoint: baseUrl,
-      modelsEndpoint: '',
-      isManualModelEntryRequired: true
+      modelsEndpoint: modelsEndpoint,
+      isManualModelEntryRequired: !modelsEndpoint
     };
   }
 
-  // 规则2：V1已包含模式（特征: 以 /v1 或 /v1/ 结尾）
-  let normalizedUrl = userProvidedUrl.endsWith('/') ? userProvidedUrl.slice(0, -1) : userProvidedUrl;
-  
-  if (normalizedUrl.endsWith('/v1')) {
+  // 规则2：根据末尾是否有 / 判断是否补充 v1
+  if (userProvidedUrl.endsWith('/')) {
+    // 有 /，不补充 v1，直接补充 chat/completions
+    const baseUrl = userProvidedUrl.slice(0, -1); // 移除末尾的 /
     return {
-      chatCompletionEndpoint: `${normalizedUrl}/chat/completions`,
-      modelsEndpoint: `${normalizedUrl}/models`,
+      chatCompletionEndpoint: `${baseUrl}/chat/completions`,
+      modelsEndpoint: `${baseUrl}/models`,
+      isManualModelEntryRequired: false
+    };
+  } else {
+    // 没有 /，补充 /v1/chat/completions
+    return {
+      chatCompletionEndpoint: `${userProvidedUrl}/v1/chat/completions`,
+      modelsEndpoint: `${userProvidedUrl}/v1/models`,
       isManualModelEntryRequired: false
     };
   }
-
-  // 规则3：标准OpenAI模式（默认规则）
-  return {
-    chatCompletionEndpoint: `${normalizedUrl}/v1/chat/completions`,
-    modelsEndpoint: `${normalizedUrl}/v1/models`,
-    isManualModelEntryRequired: false
-  };
 };
 
 // API密钥检测函数

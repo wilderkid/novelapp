@@ -162,14 +162,46 @@
           </el-form-item>
         </el-form>
       </el-tab-pane>
+
+      <el-tab-pane name="system">
+        <template #label>
+          <el-icon><Setting /></el-icon>
+          系统设置
+        </template>
+        <el-form :model="systemSettings" label-width="120px" class="settings-form">
+          <el-form-item label="HTTP代理">
+            <el-input
+              v-model="systemSettings.proxyUrl"
+              placeholder="例如: http://127.0.0.1:7890"
+            >
+              <template #prepend>
+                <el-select v-model="systemSettings.proxyProtocol" style="width: 100px">
+                  <el-option label="http://" value="http://" />
+                  <el-option label="https://" value="https://" />
+                  <el-option label="socks5://" value="socks5://" />
+                </el-select>
+              </template>
+            </el-input>
+            <div class="form-item-help">
+              设置后，所有对外部AI服务的请求将通过此代理进行。留空则不使用代理。
+            </div>
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" @click="saveSystemSettings">保存系统设置</el-button>
+          </el-form-item>
+        </el-form>
+      </el-tab-pane>
     </el-tabs>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { InfoFilled, Cpu, EditPen, Download } from '@element-plus/icons-vue'
+import { InfoFilled, Cpu, EditPen, Download, Setting } from '@element-plus/icons-vue'
+import { useSystemStore } from '@/stores/systemStore'
+
+const systemStore = useSystemStore();
 
 // 当前选中的标签页
 const activeTab = ref('basic')
@@ -215,6 +247,28 @@ const exportSettings = reactive({
   pdfPageSize: 'A4'
 })
 
+// 系统设置
+const systemSettings = reactive({
+  proxyProtocol: 'http://',
+  proxyUrl: ''
+})
+
+onMounted(() => {
+  // 从 store 加载设置
+  const fullProxyUrl = systemStore.settings.proxyUrl || '';
+  if (fullProxyUrl) {
+    // 拆分协议和地址
+    const protocolMatch = fullProxyUrl.match(/^(https?:\/\/|socks5:\/\/)/);
+    if (protocolMatch) {
+      systemSettings.proxyProtocol = protocolMatch[1];
+      systemSettings.proxyUrl = fullProxyUrl.substring(protocolMatch[1].length);
+    } else {
+      systemSettings.proxyUrl = fullProxyUrl;
+    }
+  }
+});
+
+
 // 保存项目基本信息
 const saveProjectInfo = () => {
   // 在实际应用中，这里会保存到后端
@@ -253,9 +307,29 @@ const saveExportSettings = () => {
   // 在实际应用中，这里会保存到后端或本地存储
   ElMessage.success('导出设置已保存')
 }
+
+// 保存系统设置
+const saveSystemSettings = () => {
+  // 组合协议和地址
+  const fullProxyUrl = systemSettings.proxyUrl
+    ? systemSettings.proxyProtocol + systemSettings.proxyUrl
+    : '';
+  
+  systemStore.updateSettings({
+    proxyUrl: fullProxyUrl
+  });
+  ElMessage.success('系统设置已保存');
+}
 </script>
 
 <style scoped>
+.form-item-help {
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.5;
+  margin-top: 4px;
+}
+
 .settings-container {
   padding: 20px;
   background-color: #f5f7fa;

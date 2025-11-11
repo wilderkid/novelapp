@@ -34,13 +34,17 @@
             <el-icon><ChatDotRound /></el-icon>
             <template #title><span>AI 对话</span></template>
           </el-menu-item>
-          <el-menu-item index="7" role="menuitem" tabindex="0">
+          <el-menu-item index="8" role="menuitem" tabindex="0">
             <el-icon><Opportunity /></el-icon>
             <template #title><span>创作助手</span></template>
           </el-menu-item>
+          <el-menu-item index="7" role="menuitem" tabindex="0">
+           <el-icon><Setting /></el-icon>
+           <template #title><span>系统设置</span></template>
+         </el-menu-item>
 
         </el-menu>
-        <div 
+        <div
           class="sidebar-toggle" 
           @click="toggleSidebar"
           role="button"
@@ -71,7 +75,7 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Document, MagicStick, Reading, Collection, Fold, Expand, Cpu, ChatDotRound, Opportunity } from '@element-plus/icons-vue'
+import { Document, MagicStick, Reading, Collection, Fold, Expand, Cpu, ChatDotRound, ChatLineRound, Opportunity, Setting } from '@element-plus/icons-vue'
 import { useEditorStore } from './stores/editorStore';
 import CreativeAssistant from './components/CreativeAssistant.vue';
 
@@ -103,9 +107,12 @@ const handleMenuSelect = (index) => {
     case '6':
       router.push('/chat')
       break
-    case '7':
+    case '8':
       editorStore.toggleCreativeAssistant();
       break;
+   case '7':
+       router.push('/settings')
+       break;
   }
 }
 </script>

@@ -103,11 +103,8 @@
                 <template #dropdown>
                   <el-dropdown-menu>
                     <el-dropdown-item command="">默认模型</el-dropdown-item>
-                    <el-dropdown-item-group
-                      v-for="(models, providerName) in groupedAiModels"
-                      :key="providerName"
-                      :title="providerName"
-                    >
+                    <div v-for="(models, providerName) in groupedAiModels" :key="providerName" class="provider-group">
+                      <div class="provider-group-title">{{ providerName }}</div>
                       <el-dropdown-item
                         v-for="model in models"
                         :key="model.id"
@@ -115,7 +112,7 @@
                         :class="{ 'is-active': selectedAiModelId === model.id }">
                         {{ model.name }}
                       </el-dropdown-item>
-                    </el-dropdown-item-group>
+                    </div>
                   </el-dropdown-menu>
                 </template>
               </el-dropdown>
@@ -132,11 +129,11 @@
             @keydown.enter.prevent="handleEnter"
           />
           <div class="input-actions">
-            <el-button type="primary" @click="sendMessage" :loading="isLoading" :icon="Promotion">
+            <el-button type="primary" @click.stop="sendMessage()" :loading="isLoading" :icon="Promotion">
               <span v-if="!isLoading">发送</span>
             </el-button>
-            <el-button 
-              @click="insertIntoEditor" 
+            <el-button
+              @click.stop="insertIntoEditor"
               :disabled="!activeEditorInstance || !lastAiResponse"
               title="将最后一条AI回复插入编辑器"
               :icon="DocumentCopy">
@@ -958,12 +955,19 @@ onUnmounted(() => {
 }
 
 /* --- 下拉菜单分组标题样式 --- */
-:deep(.el-dropdown-group__title) {
-  color: #909399; /* 浅灰色字体 */
+.provider-group-title {
+  color: #909399;
   font-size: 12px;
-  padding: 0 20px;
-  line-height: 30px;
+  padding: 8px 20px 4px;
   font-weight: 600;
+  pointer-events: none;
+  user-select: none;
+}
+
+.provider-group:not(:first-child) .provider-group-title {
+  margin-top: 8px;
+  border-top: 1px solid #ebeef5;
+  padding-top: 12px;
 }
 </style>
 

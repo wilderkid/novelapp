@@ -4,25 +4,48 @@
     <div class="history-sidebar">
       <div class="new-chat-button">
         <el-button type="primary" @click="startNewChat" plain>+ 新建对话</el-button>
+        <div class="button-row">
+          <el-button
+            v-if="!isSelectionMode"
+            type="warning"
+            @click="enterSelectionMode"
+            plain
+            :disabled="conversations.length === 0">
+            批量管理
+          </el-button>
+          <template v-else>
+            <el-button type="danger" @click="deleteSelectedConversations" plain :disabled="selectedConversations.length === 0">
+              删除选中 ({{ selectedConversations.length }})
+            </el-button>
+            <el-button @click="exitSelectionMode" plain>取消</el-button>
+          </template>
+        </div>
       </div>
       <el-menu class="history-menu" @select="loadChat">
         <el-menu-item v-for="conv in conversations" :key="conv.id" :index="String(conv.id)">
           <template #title>
             <div class="conv-item-content">
-              <el-icon style="margin-right: 8px;"><ChatDotRound /></el-icon>
+              <el-checkbox
+                v-if="isSelectionMode"
+                v-model="selectedConversations"
+                :value="conv.id"
+                @click.stop
+                style="margin-right: 8px;"
+              />
+              <el-icon v-else style="margin-right: 8px;"><ChatDotRound /></el-icon>
               <span class="conv-title">{{ conv.title }}</span>
-              <div class="conv-actions">
-                <el-button 
-                  :icon="Edit" 
-                  circle 
-                  size="small" 
+              <div class="conv-actions" v-if="!isSelectionMode">
+                <el-button
+                  :icon="Edit"
+                  circle
+                  size="small"
                   @click.stop="renameConversation(conv)"
                 ></el-button>
-                <el-button 
-                  :icon="Delete" 
-                  circle 
-                  size="small" 
-                  type="danger" 
+                <el-button
+                  :icon="Delete"
+                  circle
+                  size="small"
+                  type="danger"
                   @click.stop="deleteConversation(conv.id)"
                 ></el-button>
               </div>
@@ -216,6 +239,10 @@ const selectedPromptTemplateId = ref(null);
 const aiModels = ref([]);
 const selectedAiModelId = ref(null);
 
+// 批量选择状态
+const isSelectionMode = ref(false);
+const selectedConversations = ref([]);
+
 // 下拉菜单状态
 const showPromptTemplateMenu = ref(false);
 const showAiModelMenu = ref(false);
@@ -282,6 +309,61 @@ const renameConversation = async (conv) => {
     })
     .catch(() => {
       ElMessage.info('已取消重命名');
+    });
+};
+
+// 进入批量选择模式
+const enterSelectionMode = () => {
+  isSelectionMode.value = true;
+  selectedConversations.value = [];
+};
+
+// 退出批量选择模式
+const exitSelectionMode = () => {
+  isSelectionMode.value = false;
+  selectedConversations.value = [];
+};
+
+// 批量删除选中的对话
+const deleteSelectedConversations = async () => {
+  if (selectedConversations.value.length === 0) {
+    ElMessage.warning('请先选择要删除的对话');
+    return;
+  }
+
+  ElMessageBox.confirm(
+    `确定要删除选中的 ${selectedConversations.value.length} 条对话记录吗？此操作不可恢复！`,
+    '批量删除确认',
+    {
+      confirmButtonText: '确定删除',
+      cancelButtonText: '取消',
+      type: 'warning',
+    }
+  )
+    .then(async () => {
+      try {
+        // 批量删除选中的对话
+        await Promise.all(
+          selectedConversations.value.map(convId =>
+            axios.delete(`http://localhost:9009/api/conversations/${convId}`)
+          )
+        );
+        ElMessage.success(`已删除 ${selectedConversations.value.length} 条对话`);
+        
+        // 如果当前对话被删除，则开始新对话
+        if (selectedConversations.value.includes(currentConversationId.value)) {
+          startNewChat();
+        }
+        
+        fetchConversations();
+        exitSelectionMode();
+      } catch (error) {
+        console.error('Failed to delete selected conversations:', error);
+        ElMessage.error('批量删除失败');
+      }
+    })
+    .catch(() => {
+      ElMessage.info('已取消删除');
     });
 };
 
@@ -893,9 +975,20 @@ const handleEnter = (e) => {
 .new-chat-button {
   padding: 16px;
   border-bottom: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
-.new-chat-button .el-button {
+.new-chat-button > .el-button {
   width: 100%;
+  font-weight: 500;
+}
+.button-row {
+  display: flex;
+  gap: 8px;
+}
+.button-row .el-button {
+  flex: 1;
   font-weight: 500;
 }
 
@@ -1106,7 +1199,8 @@ const handleEnter = (e) => {
   bottom: 10px;
   background-color: var(--primary-color);
   color: white;
-  z-index: 10;
+  z-index: 100;
+  pointer-events: auto;
 }
 .prompt-selector-icon {
   position: absolute;

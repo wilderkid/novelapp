@@ -145,19 +145,21 @@
           />
         </el-form-item>
         <el-form-item label="小说类型" aria-label="小说类型选择框">
-          <el-select 
-            v-model="novelForm.genre" 
-            placeholder="请选择小说类型" 
+          <el-select
+            v-model="novelForm.genre"
+            placeholder="请选择小说类型"
             style="width: 100%"
             :disabled="isSaving"
             aria-label="小说类型选择框"
+            allow-create
+            filterable
           >
-            <el-option label="奇幻" value="奇幻" />
-            <el-option label="科幻" value="科幻" />
-            <el-option label="悬疑" value="悬疑" />
-            <el-option label="言情" value="言情" />
-            <el-option label="历史" value="历史" />
-            <el-option label="其他" value="其他" />
+            <el-option
+              v-for="genre in genreOptions"
+              :key="genre.id"
+              :label="genre.name"
+              :value="genre.name"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="小说描述" aria-label="小说描述输入框">
@@ -171,20 +173,11 @@
           />
         </el-form-item>
         <el-form-item label="作者" aria-label="作者输入框">
-          <el-input 
-            v-model="novelForm.author" 
-            placeholder="请输入作者名称" 
+          <el-input
+            v-model="novelForm.author"
+            placeholder="请输入作者名称"
             :disabled="isSaving"
             aria-label="作者输入框"
-          />
-        </el-form-item>
-        <el-form-item label="预计字数" aria-label="预计字数输入框">
-          <el-input-number 
-            v-model="novelForm.expectedWords" 
-            :min="1000" 
-            :max="10000000" 
-            :disabled="isSaving"
-            aria-label="预计字数输入框"
           />
         </el-form-item>
       </el-form>
@@ -233,12 +226,12 @@ const novelForm = ref({
   title: '',
   genre: '',
   description: '',
-  author: '',
-  expectedWords: 100000
+  author: ''
 })
 
 // 小说列表
 const novels = ref([])
+const genreOptions = ref([])
 
 // 加载状态
 const isLoading = ref(false)
@@ -311,8 +304,7 @@ const saveNovel = async () => {
         title: novelForm.value.title,
         genre: novelForm.value.genre,
         description: novelForm.value.description,
-        author: novelForm.value.author,
-        expectedWords: novelForm.value.expectedWords
+        author: novelForm.value.author
       })
       
       // 更新本地数据
@@ -330,8 +322,7 @@ const saveNovel = async () => {
         title: novelForm.value.title,
         genre: novelForm.value.genre,
         description: novelForm.value.description,
-        author: novelForm.value.author,
-        expectedWords: novelForm.value.expectedWords
+        author: novelForm.value.author
       })
       
       // 添加到本地列表
@@ -387,8 +378,7 @@ const resetForm = () => {
     title: '',
     genre: '',
     description: '',
-    author: '',
-    expectedWords: 100000
+    author: ''
   }
   isEditing.value = false
 }
@@ -413,6 +403,15 @@ const loadNovels = async () => {
     ElMessage.error('加载小说列表失败: ' + (error.response?.data?.detail || error.message))
   } finally {
     isLoading.value = false;
+  }
+}
+
+const loadGenres = async () => {
+  try {
+    const response = await axios.get('/api/novel-genres')
+    genreOptions.value = response.data
+  } catch (error) {
+    console.error('加载小说类型失败:', error)
   }
 }
 
@@ -444,7 +443,6 @@ const exportNovel = async (novel) => {
       genre: novel.genre,
       description: novel.description,
       author: novel.author,
-      expectedWords: novel.expectedWords,
       volumes: volumesWithChapters
     };
 
@@ -494,12 +492,14 @@ const importNovel = () => {
 // 组件挂载时加载数据和重置表单
 onMounted(async () => {
   await loadNovels()
+  await loadGenres()
   resetForm()
 })
 
 // 组件被激活时重新加载数据
 onActivated(async () => {
   await loadNovels()
+  await loadGenres()
 })
 </script>
 

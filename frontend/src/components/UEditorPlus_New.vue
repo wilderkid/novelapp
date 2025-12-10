@@ -201,6 +201,14 @@ const initEditor = (initialContent = '') => {
           isEditorInitializing = false;
           editorStore.setActiveEditorInstance(editor); // 注册编辑器实例
           emit('ready', editor);
+          
+          // 监听选区变化，实时更新缓存的选中文字
+          editor.addListener('selectionchange', () => {
+            const selectedText = editor.selection.getText();
+            if (selectedText && selectedText.trim()) {
+              editorStore.updateCachedSelectedText(selectedText.trim());
+            }
+          });
         });
       } catch (e) {
         console.error('创建编辑器失败', e);

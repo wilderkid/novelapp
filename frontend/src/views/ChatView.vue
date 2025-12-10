@@ -164,10 +164,10 @@
         </transition-group>
       </div>
       <div class="chat-input-area">
-        <div class="input-area-main">
-          <div class="prompt-selector-wrapper">
+        <div class="input-controls">
+          <div class="control-buttons">
             <el-dropdown trigger="click" :visible="showPromptTemplateMenu" @update:visible="showPromptTemplateMenu = $event" @command="selectPromptTemplate">
-              <el-button :icon="Tickets" circle />
+              <el-button :icon="Tickets" circle size="small" />
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item command="">无提示词</el-dropdown-item>
@@ -181,36 +181,56 @@
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
+            <el-button :icon="Setting" circle size="small" @click="showSettingsDialog = true" />
           </div>
-          <div class="input-wrapper">
-            <el-input
-              v-model="userInput"
-              type="textarea"
-              :rows="2"
-              :autosize="{ minRows: 2, maxRows: 8 }"
-              placeholder="请输入你的问题... (Shift+Enter 换行)"
-              @keydown.enter.prevent="handleEnter"
-            ></el-input>
-            <el-button
-              type="primary"
-              @click="sendMessageStream()"
-              class="send-button-icon"
-              :loading="isLoading"
-              :icon="Promotion"
-              circle
-            />
-          </div>
-        </div>
-        <div class="input-controls">
-          <!-- 提示词选择器 -->
           <div class="control-item">
             <span class="control-label" v-if="selectedPromptTemplateId">
               {{ getPromptTemplateName(selectedPromptTemplateId) }}
             </span>
           </div>
         </div>
+        <div class="input-wrapper">
+          <el-input
+            v-model="userInput"
+            type="textarea"
+            :rows="2"
+            :autosize="{ minRows: 2, maxRows: 8 }"
+            placeholder="请输入你的问题... (Shift+Enter 换行)"
+            @keydown.enter.prevent="handleEnter"
+          ></el-input>
+          <el-button
+            type="primary"
+            @click="sendMessageStream()"
+            class="send-button-icon"
+            :loading="isLoading"
+            :icon="Promotion"
+            circle
+          />
+        </div>
       </div>
     </div>
+
+    <!-- AI参数设置对话框 -->
+    <el-dialog v-model="showSettingsDialog" title="AI调用参数设置" width="400px">
+      <el-form label-width="100px">
+        <el-form-item label="温度">
+          <el-input-number v-model="aiSettings.temperature" :min="0" :max="1" :step="0.1" :precision="1" />
+          <div class="form-item-tip">控制输出的随机性，0-1之间</div>
+        </el-form-item>
+        <el-form-item label="最大Token">
+          <el-input-number v-model="aiSettings.maxTokens" :min="100" :max="1000000" :step="100" />
+          <div class="form-item-tip">限制AI回复的最大长度</div>
+        </el-form-item>
+        <el-form-item label="记忆轮数">
+          <el-input-number v-model="aiSettings.memoryRounds" :min="1" :max="200" :step="1" />
+          <div class="form-item-tip">保留最近N轮对话作为上下文</div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showSettingsDialog = false">取消</el-button>
+        <el-button type="primary" @click="showSettingsDialog = false">确定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -246,6 +266,14 @@ const selectedConversations = ref([]);
 // 下拉菜单状态
 const showPromptTemplateMenu = ref(false);
 const showAiModelMenu = ref(false);
+
+// AI调用参数设置
+const showSettingsDialog = ref(false);
+const aiSettings = ref({
+  temperature: systemStore.settings.chatDefaults?.temperature ?? 0.7,
+  maxTokens: systemStore.settings.chatDefaults?.maxTokens ?? 2000,
+  memoryRounds: systemStore.settings.chatDefaults?.memoryRounds ?? 10
+});
 
 // -- Computed Properties --
 const groupedAiModels = computed(() => {
@@ -516,6 +544,13 @@ onMounted(() => {
   fetchConversations();
   fetchPromptTemplates();
   fetchAiModels();
+  
+  // 应用默认设置（如果存在）
+  if (systemStore.settings.chatDefaults) {
+    selectedAiModelId.value = systemStore.settings.chatDefaults.aiModelId ?? null;
+    selectedPromptTemplateId.value = systemStore.settings.chatDefaults.promptTemplateId ?? null;
+  }
+  
   startNewChat();
 });
 
@@ -523,8 +558,14 @@ const startNewChat = () => {
   currentConversationId.value = null;
   messages.value = [{ role: 'assistant', content: '你好！有什么可以帮助你的吗？' }];
   userInput.value = '';
-  selectedPromptTemplateId.value = null; // Clear selected prompt on new chat
-  selectedAiModelId.value = null; // Clear selected AI model on new chat
+  // 恢复默认设置而不是清空
+  if (systemStore.settings.chatDefaults) {
+    selectedPromptTemplateId.value = systemStore.settings.chatDefaults.promptTemplateId ?? null;
+    selectedAiModelId.value = systemStore.settings.chatDefaults.aiModelId ?? null;
+  } else {
+    selectedPromptTemplateId.value = null;
+    selectedAiModelId.value = null;
+  }
 };
 
 // Function to clear the current conversation context (keeps the conversation ID but clears messages)
@@ -796,16 +837,20 @@ const sendMessageStream = async (messageContent = null, updateMessageIndex = nul
       // 不再使用硬编码数据，让后端从数据库中获取
     }
 
+    // 限制历史消息轮数
+    const limitedHistory = actualHistory.slice(-aiSettings.value.memoryRounds * 2);
+    
     // 准备请求参数
     const payload = {
-      message: processedUserInput, // 使用处理后的用户输入
+      message: processedUserInput,
       conversation_id: currentConversationId.value,
-      history: actualHistory.map(m => ({ role: m.role, content: m.content })),
+      history: limitedHistory.map(m => ({ role: m.role, content: m.content })),
       prompt_template_id: selectedPromptTemplateId.value,
       ai_model_id: selectedAiModelId.value,
       resources: resources,
-      project_id: currentProject.value ? currentProject.value.id : null, // 添加项目ID
-      proxy_url: systemStore.settings.proxyUrl || null // 添加代理URL
+      project_id: currentProject.value ? currentProject.value.id : null,
+      temperature: aiSettings.value.temperature,
+      max_tokens: aiSettings.value.maxTokens
     };
 
     // 使用fetch API进行流式请求
@@ -1189,6 +1234,18 @@ const handleEnter = (e) => {
   gap: 8px;
 }
 
+.form-item-tip {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
+}
+
+.control-buttons {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .input-wrapper {
   position: relative;
 }
@@ -1215,6 +1272,8 @@ const handleEnter = (e) => {
 .input-controls {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
 }
 
 .control-item {
@@ -1344,5 +1403,12 @@ const handleEnter = (e) => {
   margin-top: 8px;
   border-top: 1px solid #ebeef5;
   padding-top: 12px;
+}
+
+/* 选中项高亮样式 */
+:deep(.el-dropdown-menu__item.is-active) {
+  background-color: var(--primary-color-light);
+  color: var(--primary-color);
+  font-weight: 600;
 }
 </style>

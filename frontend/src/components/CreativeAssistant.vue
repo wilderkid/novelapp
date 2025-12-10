@@ -73,33 +73,16 @@
           </transition-group>
         </div>
         <div class="chat-input">
+          <!-- 已捕获的选中文字提示 -->
+          <div v-if="cachedSelectedText" class="captured-text-hint">
+            <span class="hint-label">已捕获：</span>
+            <span class="hint-text">{{ cachedSelectedText.substring(0, 5) }}{{ cachedSelectedText.length > 5 ? '...' : '' }}</span>
+            <el-button type="text" :icon="Close" @click="clearSelectedText" class="clear-button" title="清除选中文字"></el-button>
+          </div>
           <div class="input-controls">
-            <!-- 提示词选择器 -->
-            <div class="control-item">
-              <el-dropdown trigger="click" @command="selectPromptTemplate">
-                <el-button :icon="ChatDotRound" circle />
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item command="">无提示词</el-dropdown-item>
-                    <el-dropdown-item 
-                      v-for="item in promptTemplates" 
-                      :key="item.id" 
-                      :command="item.id"
-                      :class="{ 'is-active': selectedPromptTemplateId === item.id }">
-                      {{ item.name }}
-                    </el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
-              <span class="control-label" v-if="selectedPromptTemplateId">
-                {{ getPromptTemplateName(selectedPromptTemplateId) }}
-              </span>
-            </div>
-
-            <!-- AI模型选择器 -->
-            <div class="control-item">
-              <el-dropdown trigger="click" @command="selectAiModel">
-                <el-button :icon="Setting" circle />
+            <div class="control-buttons">
+              <el-dropdown trigger="click" @command="selectAiModel" placement="top-start" popper-class="model-dropdown-popper">
+                <el-button :icon="Cpu" circle size="small" />
                 <template #dropdown>
                   <el-dropdown-menu>
                     <el-dropdown-item command="">默认模型</el-dropdown-item>
@@ -116,8 +99,77 @@
                   </el-dropdown-menu>
                 </template>
               </el-dropdown>
+              <el-dropdown trigger="click" @command="selectPromptTemplate">
+                <el-button :icon="ChatDotRound" circle size="small" />
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="">无提示词</el-dropdown-item>
+                    <el-dropdown-item
+                      v-for="item in promptTemplates"
+                      :key="item.id"
+                      :command="item.id"
+                      :class="{ 'is-active': selectedPromptTemplateId === item.id }">
+                      {{ item.name }}
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+              <el-dropdown trigger="click" @command="insertReference">
+                <el-button :icon="Link" circle size="small" title="引用库" />
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <div v-if="!currentProject" class="reference-empty">请先选择项目</div>
+                    <template v-else>
+                      <div class="provider-group">
+                        <div class="provider-group-title">特殊引用</div>
+                        <el-dropdown-item command="选择文字">选择文字</el-dropdown-item>
+                      </div>
+                      <div v-if="references.worldview" class="provider-group">
+                        <div class="provider-group-title">世界观</div>
+                        <el-dropdown-item command="世界观">世界观</el-dropdown-item>
+                      </div>
+                      <div v-if="references.characters.length > 0" class="provider-group">
+                        <div class="provider-group-title">角色</div>
+                        <el-dropdown-item v-for="char in references.characters" :key="char.id" :command="char.name">
+                          {{ char.name }}
+                        </el-dropdown-item>
+                      </div>
+                      <div v-if="references.organizations.length > 0" class="provider-group">
+                        <div class="provider-group-title">组织</div>
+                        <el-dropdown-item v-for="org in references.organizations" :key="org.id" :command="org.name">
+                          {{ org.name }}
+                        </el-dropdown-item>
+                      </div>
+                      <div v-if="references.powers.length > 0" class="provider-group">
+                        <div class="provider-group-title">超自然力量</div>
+                        <el-dropdown-item v-for="power in references.powers" :key="power.id" :command="power.name">
+                          {{ power.name }}
+                        </el-dropdown-item>
+                      </div>
+                      <div v-if="references.weapons.length > 0" class="provider-group">
+                        <div class="provider-group-title">武器</div>
+                        <el-dropdown-item v-for="weapon in references.weapons" :key="weapon.id" :command="weapon.name">
+                          {{ weapon.name }}
+                        </el-dropdown-item>
+                      </div>
+                      <div v-if="references.dungeons.length > 0" class="provider-group">
+                        <div class="provider-group-title">副本</div>
+                        <el-dropdown-item v-for="dungeon in references.dungeons" :key="dungeon.id" :command="dungeon.name">
+                          {{ dungeon.name }}
+                        </el-dropdown-item>
+                      </div>
+                    </template>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+              <el-button :icon="Setting" circle size="small" @click="showSettingsDialog = true" />
+            </div>
+            <div class="control-item">
               <span class="control-label" v-if="selectedAiModelId">
                 {{ getAiModelName(selectedAiModelId) }}
+              </span>
+              <span class="control-label" v-if="selectedPromptTemplateId">
+                {{ getPromptTemplateName(selectedPromptTemplateId) }}
               </span>
             </div>
           </div>
@@ -145,6 +197,28 @@
       </div>
     </div>
     <div class="resize-bar"></div>
+
+    <!-- AI参数设置对话框 -->
+    <el-dialog v-model="showSettingsDialog" title="AI调用参数设置" width="400px">
+      <el-form label-width="100px">
+        <el-form-item label="温度">
+          <el-input-number v-model="aiSettings.temperature" :min="0" :max="1" :step="0.1" :precision="1" />
+          <div class="form-item-tip">控制输出的随机性，0-1之间</div>
+        </el-form-item>
+        <el-form-item label="最大Token">
+          <el-input-number v-model="aiSettings.maxTokens" :min="100" :max="1000000" :step="100" />
+          <div class="form-item-tip">限制AI回复的最大长度</div>
+        </el-form-item>
+        <el-form-item label="记忆轮数">
+          <el-input-number v-model="aiSettings.memoryRounds" :min="1" :max="200" :step="1" />
+          <div class="form-item-tip">保留最近N轮对话作为上下文</div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showSettingsDialog = false">取消</el-button>
+        <el-button type="primary" @click="showSettingsDialog = false">确定</el-button>
+      </template>
+    </el-dialog>
   </el-aside>
 </template>
 
@@ -156,8 +230,9 @@ import { useConversationStore } from '../stores/conversationStore';
 import { useSystemStore } from '../stores/systemStore';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import axios from 'axios';
-import { Right, ChatDotRound, Setting, CopyDocument, Refresh, ChatLineRound, User, Delete, Promotion, DocumentCopy, Files, ArrowDown, ArrowUp, Loading } from '@element-plus/icons-vue';
+import { Right, ChatDotRound, Setting, CopyDocument, Refresh, ChatLineRound, User, Delete, Promotion, DocumentCopy, Files, ArrowDown, ArrowUp, Loading, Close, Cpu, Link } from '@element-plus/icons-vue';
 import MarkdownIt from 'markdown-it';
+import { worldviewService, characterService, organizationService, supernaturalPowerService, weaponService, dungeonService } from '../services/resourceService';
 
 const editorStore = useEditorStore();
 const projectStore = useProjectStore();
@@ -179,9 +254,28 @@ const aiModels = ref([]);
 const selectedPromptTemplateId = ref(null);
 const selectedAiModelId = ref(null);
 
+// AI调用参数设置
+const showSettingsDialog = ref(false);
+const aiSettings = ref({
+  temperature: systemStore.settings.assistantDefaults?.temperature ?? 0.7,
+  maxTokens: systemStore.settings.assistantDefaults?.maxTokens ?? 2000,
+  memoryRounds: systemStore.settings.assistantDefaults?.memoryRounds ?? 10
+});
+
 const activeEditorInstance = computed(() => editorStore.activeEditorInstance);
 const creativeAssistantVisible = computed(() => editorStore.creativeAssistantVisible);
 const currentProject = computed(() => projectStore.currentProject);
+const cachedSelectedText = computed(() => editorStore.cachedSelectedText);
+
+// 引用库数据
+const references = ref({
+  worldview: null,
+  characters: [],
+  organizations: [],
+  powers: [],
+  weapons: [],
+  dungeons: []
+});
 
 const lastAiResponse = computed(() => {
   const aiMessages = messages.value.filter(m => m.role === 'assistant');
@@ -237,8 +331,16 @@ const fetchAiModels = async () => {
 onMounted(() => {
   fetchPromptTemplates();
   fetchAiModels();
-  messages.value.push({ 
-    role: 'assistant', 
+  loadReferences();
+  
+  // 应用默认设置（如果存在）
+  if (systemStore.settings.assistantDefaults) {
+    selectedAiModelId.value = systemStore.settings.assistantDefaults.aiModelId ?? null;
+    selectedPromptTemplateId.value = systemStore.settings.assistantDefaults.promptTemplateId ?? null;
+  }
+  
+  messages.value.push({
+    role: 'assistant',
     content: '你好！有什么可以帮助你的吗？',
     isThinking: false,
     hadThinkingProcess: false,
@@ -251,6 +353,11 @@ onMounted(() => {
       initResize();
     });
   }
+});
+
+// 监听项目变化，重新加载引用库
+watch(currentProject, () => {
+  loadReferences();
 });
 
 // 监听侧边栏可见性，在可见时初始化拖动功能
@@ -278,6 +385,55 @@ const getPromptTemplateName = (templateId) => {
 const getAiModelName = (modelId) => {
   const model = aiModels.value.find(m => m.id === modelId);
   return model ? model.name : '';
+};
+
+// 加载引用库数据
+const loadReferences = async () => {
+  if (!currentProject.value) {
+    references.value = {
+      worldview: null,
+      characters: [],
+      organizations: [],
+      powers: [],
+      weapons: [],
+      dungeons: []
+    };
+    return;
+  }
+
+  try {
+    const projectId = currentProject.value.id;
+    
+    // 加载世界观
+    try {
+      const worldviewRes = await worldviewService.get(projectId);
+      references.value.worldview = worldviewRes.data;
+    } catch (e) {
+      references.value.worldview = null;
+    }
+
+    // 加载其他资源
+    const [charsRes, orgsRes, powersRes, weaponsRes, dungeonsRes] = await Promise.all([
+      characterService.getAll(projectId).catch(() => ({ data: [] })),
+      organizationService.getAll(projectId).catch(() => ({ data: [] })),
+      supernaturalPowerService.getAll(projectId).catch(() => ({ data: [] })),
+      weaponService.getAll(projectId).catch(() => ({ data: [] })),
+      dungeonService.getAll(projectId).catch(() => ({ data: [] }))
+    ]);
+
+    references.value.characters = charsRes.data;
+    references.value.organizations = orgsRes.data;
+    references.value.powers = powersRes.data;
+    references.value.weapons = weaponsRes.data;
+    references.value.dungeons = dungeonsRes.data;
+  } catch (error) {
+    console.error('Failed to load references:', error);
+  }
+};
+
+// 插入引用
+const insertReference = (name) => {
+  userInput.value += `{{${name}}}`;
 };
 
 const scrollToBottom = () => {
@@ -388,14 +544,23 @@ const sendMessage = async (messageContent = null, updateMessageIndex = null) => 
       actualHistory = tempHistory;
     }
 
+    // 限制历史消息轮数
+    const limitedHistory = actualHistory.slice(-aiSettings.value.memoryRounds * 2);
+
+    // 获取编辑器中选中的文字
+    const selectedText = editorStore.getSelectedText();
+    
     const payload = {
-      message: processedUserInput, // 使用渲染后的用户输入
-      conversation_id: conversationId.value, // Use conversation ID if exists
-      history: actualHistory.map(m => ({ role: m.role, content: m.content })),
+      message: processedUserInput,
+      conversation_id: conversationId.value,
+      history: limitedHistory.map(m => ({ role: m.role, content: m.content })),
       prompt_template_id: selectedPromptTemplateId.value,
       ai_model_id: selectedAiModelId.value,
-      project_id: currentProject.value ? currentProject.value.id : null, // 附加项目ID
-      proxy_url: systemStore.settings.proxyUrl || null // 添加代理URL
+      project_id: currentProject.value ? currentProject.value.id : null,
+      proxy_url: systemStore.settings.proxyUrl || null,
+      selected_text: selectedText || null,
+      temperature: aiSettings.value.temperature,
+      max_tokens: aiSettings.value.maxTokens
     };
 
     const response = await fetch('http://localhost:9009/api/chat/stream', {
@@ -620,7 +785,10 @@ const copyMessage = async (content) => {
   }
 };
 
-
+// 清除选中文字
+const clearSelectedText = () => {
+  editorStore.clearCachedSelectedText();
+};
 
 // 侧边栏宽度调整
 const assistantSidebar = ref(null);
@@ -904,10 +1072,59 @@ onUnmounted(() => {
   border-top: 1px solid var(--border-color);
   flex-shrink: 0;
 }
+
+/* 已捕获文字提示 */
+.captured-text-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background-color: #f0f9ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+
+.hint-label {
+  color: #3b82f6;
+  font-weight: 500;
+}
+
+.hint-text {
+  color: #1e40af;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.clear-button {
+  padding: 0;
+  min-width: auto;
+  color: #6b7280;
+}
+
+.clear-button:hover {
+  color: #ef4444;
+}
+
+.form-item-tip {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
+}
+
 .input-controls {
   display: flex;
-  gap: 10px;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 10px;
+}
+
+.control-buttons {
+  display: flex;
+  gap: 8px;
   align-items: center;
 }
 .control-item {
@@ -968,6 +1185,36 @@ onUnmounted(() => {
   margin-top: 8px;
   border-top: 1px solid #ebeef5;
   padding-top: 12px;
+}
+
+/* 选中项高亮样式 */
+:deep(.el-dropdown-menu__item.is-active) {
+  background-color: var(--primary-color-light);
+  color: var(--primary-color);
+  font-weight: 600;
+}
+
+/* 引用库空状态 */
+.reference-empty {
+  padding: 12px 20px;
+  color: #909399;
+  font-size: 13px;
+  text-align: center;
+}
+
+/* 模型下拉菜单最大高度和滚动 */
+.model-dropdown-popper {
+  max-height: 50vh !important;
+  overflow-y: auto !important;
+}
+
+.model-dropdown-popper .el-dropdown-menu {
+  max-height: 50vh !important;
+}
+
+.model-dropdown-popper .el-dropdown-menu__list {
+  max-height: 48vh !important;
+  overflow-y: auto !important;
 }
 </style>
 

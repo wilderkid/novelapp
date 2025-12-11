@@ -696,13 +696,23 @@ const saveVolume = async () => {
       console.log('自动计算分卷序号:', nextOrder)
     }
 
-    // 添加项目ID和自动计算的序号
-    // 创建新分卷时，移除id字段（因为id由数据库自动生成）
-    const { id, ...volumeDataWithoutId } = volumeForm.value
-    const volumeData = {
-      ...volumeDataWithoutId,
-      order: nextOrder,
-      project_id: projectStore.currentProject.id
+    // 准备保存数据
+    let volumeData
+    if (isEditingVolume.value) {
+      // 编辑模式：保留id字段
+      volumeData = {
+        ...volumeForm.value,
+        order: nextOrder,
+        project_id: projectStore.currentProject.id
+      }
+    } else {
+      // 创建模式：移除id字段
+      const { id, ...volumeDataWithoutId } = volumeForm.value
+      volumeData = {
+        ...volumeDataWithoutId,
+        order: nextOrder,
+        project_id: projectStore.currentProject.id
+      }
     }
 
     // 保存到数据库

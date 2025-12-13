@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:9009/api';
+const API_URL = '/api';
 
 // Generic resource handler
 const resourceApi = (resourceName, pluralName) => ({

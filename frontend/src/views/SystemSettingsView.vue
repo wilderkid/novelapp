@@ -153,7 +153,7 @@ const groupedAiModels = computed(() => {
 
 const fetchPromptTemplates = async () => {
   try {
-    const response = await axios.get('http://localhost:9009/api/prompt-templates');
+    const response = await axios.get('/api/prompt-templates');
     promptTemplates.value = response.data;
   } catch (error) {
     console.error('Failed to fetch prompt templates:', error);
@@ -163,7 +163,7 @@ const fetchPromptTemplates = async () => {
 
 const fetchAiModels = async () => {
   try {
-    const response = await axios.get('http://localhost:9009/api/ai-models');
+    const response = await axios.get('/api/ai-models');
     aiModels.value = response.data;
   } catch (error) {
     console.error('Failed to fetch AI models:', error);
@@ -198,7 +198,7 @@ onMounted(async () => {
 
 const fetchGenres = async () => {
   try {
-    const response = await axios.get('http://localhost:9009/api/novel-genres');
+    const response = await axios.get('/api/novel-genres');
     genres.value = response.data;
   } catch (error) {
     console.error('Failed to fetch genres:', error);
@@ -220,10 +220,10 @@ const saveGenre = async () => {
   
   try {
     if (genreForm.id) {
-      await axios.put(`http://localhost:9009/api/novel-genres/${genreForm.id}`, { name: genreForm.name });
+      await axios.put(`/api/novel-genres/${genreForm.id}`, { name: genreForm.name });
       ElMessage.success('类型已更新');
     } else {
-      await axios.post('http://localhost:9009/api/novel-genres', { name: genreForm.name });
+      await axios.post('/api/novel-genres', { name: genreForm.name });
       ElMessage.success('类型已创建');
     }
     showGenreDialog.value = false;
@@ -244,7 +244,7 @@ const deleteGenre = async (genre) => {
       type: 'warning'
     });
     
-    await axios.delete(`http://localhost:9009/api/novel-genres/${genre.id}`);
+    await axios.delete(`/api/novel-genres/${genre.id}`);
     ElMessage.success('类型已删除');
     await fetchGenres();
   } catch (error) {

@@ -309,7 +309,7 @@ const toggleCollapse = () => {
 
 const fetchPromptTemplates = async () => {
   try {
-    const response = await axios.get(`http://localhost:9009/api/prompt-templates`);
+    const response = await axios.get(`/api/prompt-templates`);
     promptTemplates.value = response.data;
   } catch (error) {
     console.error('Failed to fetch prompt templates:', error);
@@ -319,7 +319,7 @@ const fetchPromptTemplates = async () => {
 
 const fetchAiModels = async () => {
   try {
-    const response = await axios.get(`http://localhost:9009/api/ai-models`);
+    const response = await axios.get(`/api/ai-models`);
     // 后端已过滤，前端直接使用返回的数据
     aiModels.value = response.data;
   } catch (error) {
@@ -515,7 +515,7 @@ const sendMessage = async (messageContent = null, updateMessageIndex = null) => 
         content: content,
         project_id: currentProject.value.id,
       };
-      const response = await axios.post('http://localhost:9009/api/prompts/render', renderPayload);
+      const response = await axios.post('/api/prompts/render', renderPayload);
       processedUserInput = response.data.rendered_content;
     } catch (error) {
       console.error('Failed to render user input:', error);
@@ -563,7 +563,7 @@ const sendMessage = async (messageContent = null, updateMessageIndex = null) => 
       max_tokens: aiSettings.value.maxTokens
     };
 
-    const response = await fetch('http://localhost:9009/api/chat/stream', {
+    const response = await fetch('/api/chat/stream', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

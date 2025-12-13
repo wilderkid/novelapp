@@ -1,11 +1,11 @@
 // 前端配置文件
 const config = {
   // API基础URL
-  apiBaseUrl: 'http://localhost:9009',
+  apiBaseUrl: '/api',
 
   // 编辑器配置
   editor: {
-    serverUrl: 'http://localhost:9009/api/ueditor',
+    serverUrl: '/api/ueditor',
     UEDITOR_HOME_URL: '/static/UEditorPlus/',
     UEDITOR_CORS_URL: '/static/UEditorPlus/',
     toolbars: [

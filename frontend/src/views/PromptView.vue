@@ -148,7 +148,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 // 图标已替换为SVG，无需导入Element Plus图标
 import axios from 'axios';
 
-const API_URL = 'http://localhost:9009/api';
+const API_URL = '/api';
 
 const router = useRouter();
 const projectStore = useProjectStore();

@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:9009/api';
+const API_URL = '/api';
 
 // OpenAI兼容模式URL处理函数
 export const processOpenAIUrl = (userProvidedUrl) => {

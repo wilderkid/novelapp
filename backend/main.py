@@ -44,10 +44,10 @@ Base.metadata.create_all(bind=engine)
 # FastAPI应用
 app = FastAPI(title="StoryForge API", version="1.0.0")
 
-# CORS配置
+# CORS配置 - 允许局域网访问
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["*"],  # 允许所有来源访问
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

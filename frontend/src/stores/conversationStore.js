@@ -11,7 +11,7 @@ export const useConversationStore = defineStore('conversation', () => {
   // 获取所有对话
   const fetchConversations = async () => {
     try {
-      const response = await axios.get('http://localhost:9009/api/conversations')
+      const response = await axios.get('/api/conversations')
       conversations.value = response.data
       return response.data
     } catch (error) {
@@ -23,7 +23,7 @@ export const useConversationStore = defineStore('conversation', () => {
   // 获取指定对话的消息
   const fetchConversationMessages = async (convId) => {
     try {
-      const response = await axios.get(`http://localhost:9009/api/conversations/${convId}/messages`)
+      const response = await axios.get(`/api/conversations/${convId}/messages`)
       return response.data.map(m => ({ role: m.role, content: m.content }))
     } catch (error) {
       console.error('Failed to fetch conversation messages:', error)
@@ -80,7 +80,7 @@ export const useConversationStore = defineStore('conversation', () => {
   // 删除对话
   const deleteConversation = async (convId) => {
     try {
-      await axios.delete(`http://localhost:9009/api/conversations/${convId}`)
+      await axios.delete(`/api/conversations/${convId}`)
       conversations.value = conversations.value.filter(conv => conv.id !== convId)
       
       // 如果删除的是当前对话，则开始新对话
@@ -96,7 +96,7 @@ export const useConversationStore = defineStore('conversation', () => {
   // 重命名对话
   const renameConversation = async (convId, newTitle) => {
     try {
-      await axios.put(`http://localhost:9009/api/conversations/${convId}`, { title: newTitle })
+      await axios.put(`/api/conversations/${convId}`, { title: newTitle })
       const conversation = conversations.value.find(conv => conv.id === convId)
       if (conversation) {
         conversation.title = newTitle
@@ -120,7 +120,7 @@ export const useConversationStore = defineStore('conversation', () => {
           content: content,
           project_id: project_id,
         };
-        const response = await axios.post('http://localhost:9009/api/prompts/render', renderPayload);
+        const response = await axios.post('/api/prompts/render', renderPayload);
         content = response.data.rendered_content;
         console.log('[ConversationStore DEBUG] User input rendered to:', content);
       } catch (error) {
@@ -138,7 +138,7 @@ export const useConversationStore = defineStore('conversation', () => {
       project_id: project_id,
     };
 
-    const response = await axios.post('http://localhost:9009/api/chat', payload);
+    const response = await axios.post('/api/chat', payload);
     return response.data;
   };
 
@@ -155,7 +155,7 @@ export const useConversationStore = defineStore('conversation', () => {
           content: content,
           project_id: project_id,
         };
-        const response = await axios.post('http://localhost:9009/api/prompts/render', renderPayload);
+        const response = await axios.post('/api/prompts/render', renderPayload);
         content = response.data.rendered_content;
         console.log('[ConversationStore DEBUG] User input rendered to:', content);
       } catch (error) {
@@ -173,7 +173,7 @@ export const useConversationStore = defineStore('conversation', () => {
       project_id: project_id,
     };
 
-    const response = await fetch('http://localhost:9009/api/chat/stream', {
+    const response = await fetch('/api/chat/stream', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

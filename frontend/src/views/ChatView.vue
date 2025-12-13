@@ -301,7 +301,7 @@ const deleteConversation = async (convId) => {
   )
     .then(async () => {
       try {
-        await axios.delete(`http://localhost:9009/api/conversations/${convId}`);
+        await axios.delete(`/api/conversations/${convId}`);
         ElMessage.success('对话删除成功');
         fetchConversations();
         if (currentConversationId.value === convId) {
@@ -327,7 +327,7 @@ const renameConversation = async (conv) => {
   })
     .then(async ({ value }) => {
       try {
-        await axios.put(`http://localhost:9009/api/conversations/${conv.id}`, { title: value });
+        await axios.put(`/api/conversations/${conv.id}`, { title: value });
         ElMessage.success('对话重命名成功');
         fetchConversations();
       } catch (error) {
@@ -373,7 +373,7 @@ const deleteSelectedConversations = async () => {
         // 批量删除选中的对话
         await Promise.all(
           selectedConversations.value.map(convId =>
-            axios.delete(`http://localhost:9009/api/conversations/${convId}`)
+            axios.delete(`/api/conversations/${convId}`)
           )
         );
         ElMessage.success(`已删除 ${selectedConversations.value.length} 条对话`);
@@ -510,7 +510,7 @@ const getAiModelName = (modelId) => {
 
 const fetchConversations = async () => {
   try {
-    const response = await axios.get(`http://localhost:9009/api/conversations`);
+    const response = await axios.get(`/api/conversations`);
     conversations.value = response.data;
   } catch (error) {
     console.error('Failed to fetch conversations:', error);
@@ -520,7 +520,7 @@ const fetchConversations = async () => {
 
 const fetchPromptTemplates = async () => {
   try {
-    const response = await axios.get(`http://localhost:9009/api/prompt-templates`);
+    const response = await axios.get(`/api/prompt-templates`);
     promptTemplates.value = response.data;
   } catch (error) {
     console.error('Failed to fetch prompt templates:', error);
@@ -531,7 +531,7 @@ const fetchPromptTemplates = async () => {
 const fetchAiModels = async () => {
   try {
     // Get all AI models in one call
-    const response = await axios.get(`http://localhost:9009/api/ai-models`);
+    const response = await axios.get(`/api/ai-models`);
     // 后端已过滤，前端直接使用返回的数据
     aiModels.value = response.data;
   } catch (error) {
@@ -598,7 +598,7 @@ const clearConversation = () => {
 const loadChat = async (convId) => {
   if (!convId) return;
   try {
-    const response = await axios.get(`http://localhost:9009/api/conversations/${convId}/messages`);
+    const response = await axios.get(`/api/conversations/${convId}/messages`);
     messages.value = response.data.map(m => {
       // 前端统一处理思考和最终内容
       const rawContent = m.content || '';
@@ -673,7 +673,7 @@ const sendMessage = async (messageContent = null) => {
         content: content,
         project_id: currentProject.value.id,
       };
-      const response = await axios.post('http://localhost:9009/api/prompts/render', renderPayload);
+      const response = await axios.post('/api/prompts/render', renderPayload);
       processedUserInput = response.data.rendered_content;
     } catch (error) {
       console.error('Failed to render user input:', error);
@@ -713,7 +713,7 @@ const sendMessage = async (messageContent = null) => {
       project_id: currentProject.value ? currentProject.value.id : null // 添加项目ID
     };
 
-    const response = await axios.post('http://localhost:9009/api/chat', payload);
+    const response = await axios.post('/api/chat', payload);
 
     messages.value[messages.value.length - 1].content = response.data.reply;
 
@@ -806,7 +806,7 @@ const sendMessageStream = async (messageContent = null, updateMessageIndex = nul
         content: content,
         project_id: currentProject.value.id,
       };
-      const response = await axios.post('http://localhost:9009/api/prompts/render', renderPayload);
+      const response = await axios.post('/api/prompts/render', renderPayload);
       processedUserInput = response.data.rendered_content;
     } catch (error) {
       console.error('Failed to render user input:', error);
@@ -854,7 +854,7 @@ const sendMessageStream = async (messageContent = null, updateMessageIndex = nul
     };
 
     // 使用fetch API进行流式请求
-    const response = await fetch('http://localhost:9009/api/chat/stream', {
+    const response = await fetch('/api/chat/stream', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

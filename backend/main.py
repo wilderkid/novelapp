@@ -41,6 +41,13 @@ from schemas import (
 # 创建数据库表
 Base.metadata.create_all(bind=engine)
 
+# 初始化默认数据
+try:
+    from init_default_data import init_default_data
+    init_default_data()
+except Exception as e:
+    print(f"警告: 初始化默认数据时出错: {e}")
+
 # FastAPI应用
 app = FastAPI(title="StoryForge API", version="1.0.0")
 

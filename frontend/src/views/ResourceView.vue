@@ -217,6 +217,10 @@ const autoSaveResource = async () => {
     const id = type === 'worldview' ? projectStore.currentProject.id : item.id;
     await service.update(id, item);
     lastSaveTime.value = new Date();
+    // Refresh sidebar list if not worldview
+    if (type !== 'worldview' && sidebarRef.value) {
+      sidebarRef.value.refreshList(type);
+    }
     ElMessage.success({
       message: '自动保存成功',
       duration: 1000,
@@ -240,6 +244,10 @@ const saveCurrentResource = async () => {
     const id = type === 'worldview' ? projectStore.currentProject.id : item.id;
     await service.update(id, item);
     lastSaveTime.value = new Date();
+    // Refresh sidebar list if not worldview
+    if (type !== 'worldview' && sidebarRef.value) {
+      sidebarRef.value.refreshList(type);
+    }
     ElMessage.success('资源已保存');
   } catch (error) {
     ElMessage.error('保存资源失败');

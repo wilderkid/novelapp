@@ -17,8 +17,16 @@
       </div>
 
       <div class="content-main">
+        <!-- 侧边栏收缩按钮 -->
+        <div class="sidebar-toggle" @click="toggleSidebar">
+          <el-icon>
+            <DArrowLeft v-if="sidebarCollapsed" />
+            <DArrowRight v-else />
+          </el-icon>
+        </div>
+
         <!-- 左侧分卷和章节树形列表 -->
-        <div class="sidebar" :style="{ width: sidebarWidth + 'px' }">
+        <div class="sidebar" v-show="!sidebarCollapsed" :style="{ width: sidebarWidth + 'px' }">
           <div class="sidebar-header">
             <h3>分卷与章节</h3>
             <div class="sidebar-actions">
@@ -249,7 +257,7 @@
 import { ref, reactive, onMounted, watch, computed, nextTick, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, View, Edit, Delete, List, Document, DocumentCopy, Timer } from '@element-plus/icons-vue'
+import { Plus, View, Edit, Delete, List, Document, DocumentCopy, Timer, DArrowLeft, DArrowRight } from '@element-plus/icons-vue'
 import { useEditorStore } from '../stores/editorStore'
 import { useProjectStore } from '../stores/projectStore'
 import UEditorPlus from '../components/UEditorPlus_New.vue'
@@ -393,9 +401,15 @@ const editorContainer = ref(null)
 
 // 容器宽度调整
 const sidebarWidth = ref(300)
+const sidebarCollapsed = ref(false)
 const isResizing = ref(false)
 const startX = ref(0)
 const startWidth = ref(0)
+
+// 切换侧边栏显示/隐藏
+const toggleSidebar = () => {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+}
 
 // 拖动排序相关
 const treeContainer = ref(null)

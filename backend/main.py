@@ -194,6 +194,9 @@ def update_project(project_id: int, project: ProjectCreate, db: Session = Depend
 
     for key, value in project.dict().items():
         setattr(db_project, key, value)
+    
+    # 显式更新 updated_at 字段
+    db_project.updated_at = func.now()
 
     db.commit()
     db.refresh(db_project)
@@ -287,6 +290,13 @@ def create_chapter(volume_id: int, chapter: ChapterCreate, db: Session = Depends
     chapter_data = chapter.dict(exclude={"volume_id"})
     db_chapter = Chapter(project_id=volume.project_id, volume_id=volume_id, **chapter_data)
     db.add(db_chapter)
+    
+    # 同步更新所属项目的 updated_at
+    if volume.project_id:
+        db_project = db.query(Project).filter(Project.id == volume.project_id).first()
+        if db_project:
+            db_project.updated_at = func.now()
+    
     db.commit()
     db.refresh(db_chapter)
     return db_chapter
@@ -318,6 +328,15 @@ def update_chapter(chapter_id: int, chapter: ChapterCreate, db: Session = Depend
 
     for key, value in update_data.items():
         setattr(db_chapter, key, value)
+    
+    # 显式更新章节的 updated_at
+    db_chapter.updated_at = func.now()
+    
+    # 同步更新所属项目的 updated_at
+    if db_chapter.project_id:
+        db_project = db.query(Project).filter(Project.id == db_chapter.project_id).first()
+        if db_project:
+            db_project.updated_at = func.now()
 
     db.commit()
     db.refresh(db_chapter)
@@ -330,7 +349,15 @@ def delete_chapter(chapter_id: int, db: Session = Depends(get_db)):
     if not db_chapter:
         raise HTTPException(status_code=404, detail="章节不存在")
 
+    project_id = db_chapter.project_id
     db.delete(db_chapter)
+    
+    # 同步更新所属项目的 updated_at
+    if project_id:
+        db_project = db.query(Project).filter(Project.id == project_id).first()
+        if db_project:
+            db_project.updated_at = func.now()
+    
     db.commit()
     return {"message": "章节已删除"}
 

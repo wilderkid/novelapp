@@ -59,7 +59,7 @@
             {{ scope.row.chapterCount || scope.row.chapter_count || 0 }}
           </template>
         </el-table-column>
-        <el-table-column prop="created_at" label="创建时间" width="170">
+        <el-table-column prop="created_at" label="创建时间" width="170" sortable>
           <template #header>
             <el-icon><Clock /></el-icon> 创建时间
           </template>
@@ -67,7 +67,7 @@
             {{ formatDate(scope.row.created_at) }}
           </template>
         </el-table-column>
-        <el-table-column prop="updated_at" label="更新时间" width="170">
+        <el-table-column prop="updated_at" label="更新时间" width="170" sortable>
           <template #header>
             <el-icon><Timer /></el-icon> 更新时间
           </template>

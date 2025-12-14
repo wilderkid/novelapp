@@ -13,7 +13,7 @@ class Project(Base):
     description = Column(Text)
     author = Column(String)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # 关系
 
@@ -39,7 +39,7 @@ class Volume(Base):
     description = Column(Text)
     order = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # 关系
     project = relationship("Project", back_populates="volumes")
@@ -57,7 +57,7 @@ class Chapter(Base):
     word_count = Column(Integer, default=0)
     order = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # 关系
     project = relationship("Project", back_populates="chapters")
@@ -74,7 +74,7 @@ class AIProvider(Base):
     enabled = Column(Boolean, default=True)
     is_system = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     models = relationship("AIModel", back_populates="provider", cascade="all, delete-orphan")
 
@@ -90,7 +90,7 @@ class AIModel(Base):
     is_default = Column(Boolean, default=False)
     enabled = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     provider = relationship("AIProvider", back_populates="models")
 
@@ -106,7 +106,7 @@ class PromptTemplate(Base):
     is_default = Column(Boolean, default=False)
     project_id = Column(Integer, ForeignKey("projects.id"))  # 添加项目ID字段
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     project = relationship("Project", back_populates="prompt_templates")  # 添加与项目的关系
 
@@ -118,7 +118,7 @@ class Worldview(Base):
     project_id = Column(Integer, ForeignKey("projects.id"))
     content = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     project = relationship("Project", back_populates="worldviews")
 
@@ -130,7 +130,7 @@ class RPGCharacter(Base):
     name = Column(String, nullable=False)
     content = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     project = relationship("Project", back_populates="rpg_characters")
 
@@ -142,7 +142,7 @@ class Organization(Base):
     name = Column(String, nullable=False)
     content = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     project = relationship("Project", back_populates="organizations")
 
@@ -154,7 +154,7 @@ class SupernaturalPower(Base):
     name = Column(String, nullable=False)
     content = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     project = relationship("Project", back_populates="supernatural_powers")
 
@@ -166,7 +166,7 @@ class Weapon(Base):
     name = Column(String, nullable=False)
     content = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     project = relationship("Project", back_populates="weapons")
 
@@ -177,7 +177,7 @@ class Dungeon(Base):
     name = Column(String, nullable=False)
     content = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     project = relationship("Project", back_populates="dungeons")
 
@@ -208,4 +208,4 @@ class NovelGenre(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False, unique=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

@@ -42,6 +42,7 @@
                 v-model="currentResource.item.content"
                 :editor-id="'resource-editor-' + currentResource.type + '-' + currentResource.item.id"
                 :key="currentResource.type + '-' + currentResource.item.id"
+                @auto-save="autoSaveResource"
               />
             </div>
           </div>
@@ -102,6 +103,10 @@ const sidebarRef = ref(null);
 // Editor state
 const currentResource = ref(null);
 const resourceEditorRef = ref(null);
+
+// Auto-save state
+const isSaving = ref(false);
+const lastSaveTime = ref(null);
 
 // Modal state
 const summaryModalVisible = ref(false);
@@ -170,9 +175,13 @@ const addNewItem = async () => {
     await service.create(projectStore.currentProject.id, { name: newItemName.value, content: '' });
     ElMessage.success('新增成功');
     addItemModalVisible.value = false;
-    // Refresh list
+    // Refresh modal list
     const response = await service.getAll(projectStore.currentProject.id);
     resourceList.value = response.data;
+    // Refresh sidebar list
+    if (sidebarRef.value) {
+      sidebarRef.value.refreshList(currentOpenResourceType.value);
+    }
   } catch (error) {
     ElMessage.error('新增失败');
   }
@@ -197,16 +206,45 @@ const confirmDeleteResource = (item) => {
   }).catch(() => {});
 };
 
-const saveCurrentResource = async () => {
-  if (!currentResource.value) return;
-  const { type, item } = currentResource.value;
-  const service = resourceTypeMap[type].service;
+// Auto-save resource
+const autoSaveResource = async () => {
+  if (!currentResource.value || isSaving.value) return;
+  
   try {
+    isSaving.value = true;
+    const { type, item } = currentResource.value;
+    const service = resourceTypeMap[type].service;
     const id = type === 'worldview' ? projectStore.currentProject.id : item.id;
     await service.update(id, item);
+    lastSaveTime.value = new Date();
+    ElMessage.success({
+      message: '自动保存成功',
+      duration: 1000,
+      showClose: false
+    });
+  } catch (error) {
+    console.error('自动保存失败:', error);
+  } finally {
+    isSaving.value = false;
+  }
+};
+
+// Manual save resource
+const saveCurrentResource = async () => {
+  if (!currentResource.value) return;
+  
+  try {
+    isSaving.value = true;
+    const { type, item } = currentResource.value;
+    const service = resourceTypeMap[type].service;
+    const id = type === 'worldview' ? projectStore.currentProject.id : item.id;
+    await service.update(id, item);
+    lastSaveTime.value = new Date();
     ElMessage.success('资源已保存');
   } catch (error) {
     ElMessage.error('保存资源失败');
+  } finally {
+    isSaving.value = false;
   }
 };
 

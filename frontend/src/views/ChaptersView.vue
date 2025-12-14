@@ -102,6 +102,7 @@
                 v-model="currentChapter.content"
                 editor-id="chapter-editor"
                 @ready="onEditorReady"
+                @auto-save="autoSaveChapter"
               />
             </div>
           </div>
@@ -245,7 +246,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch, computed, nextTick } from 'vue'
+import { ref, reactive, onMounted, watch, computed, nextTick, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, View, Edit, Delete, List, Document, DocumentCopy, Timer } from '@element-plus/icons-vue'
@@ -318,6 +319,10 @@ const currentVolumeId = ref(null)
 
 // 当前编辑的章节
 const currentChapter = ref(null)
+
+// 自动保存相关
+const isSaving = ref(false)
+const lastSaveTime = ref(null)
 
 // 分卷数据
 const volumes = ref([
@@ -541,7 +546,36 @@ const loadVolumesAndChapters = async () => {
   }
 }
 
-// 保存当前章节
+// 自动保存章节
+const autoSaveChapter = async () => {
+  if (!currentChapter.value || isSaving.value) return
+  
+  try {
+    isSaving.value = true
+    
+    // 计算字数
+    const content = currentChapter.value.content || ''
+    const textContent = content.replace(/<[^>]*>/g, '').trim()
+    const wordCount = textContent.length || 0
+    currentChapter.value.wordCount = wordCount
+    
+    // 保存到数据库
+    await chapterService.saveChapter(currentChapter.value)
+    
+    lastSaveTime.value = new Date()
+    ElMessage.success({
+      message: '自动保存成功',
+      duration: 1000,
+      showClose: false
+    })
+  } catch (error) {
+    console.error('自动保存失败:', error)
+  } finally {
+    isSaving.value = false
+  }
+}
+
+// 保存当前章节（手动保存）
 const saveCurrentChapter = async () => {
   if (!currentChapter.value) return
 
@@ -551,6 +585,8 @@ const saveCurrentChapter = async () => {
   }
 
   try {
+    isSaving.value = true
+    
     // 计算字数（移除HTML标签后）
     const content = currentChapter.value.content || ''
     const textContent = content.replace(/<[^>]*>/g, '').trim()
@@ -567,11 +603,14 @@ const saveCurrentChapter = async () => {
 
     // 更新当前编辑的章节
     currentChapter.value = savedChapter
-
+    
+    lastSaveTime.value = new Date()
     ElMessage.success('章节已保存到数据库')
   } catch (error) {
     console.error('保存章节失败:', error)
     ElMessage.error('保存章节失败: ' + (error.response?.data?.message || error.message))
+  } finally {
+    isSaving.value = false
   }
 }
 

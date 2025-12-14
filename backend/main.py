@@ -97,8 +97,8 @@ def process_openai_url(base_url: str) -> str:
 @app.get("/api/projects", response_model=List[ProjectResponse])
 def get_projects(db: Session = Depends(get_db)):
     """获取所有项目"""
-    # 使用 joinedload 高效地一次性获取所有项目及其关联的章节
-    projects = db.query(Project).options(joinedload(Project.chapters)).all()
+    # 使用 joinedload 高效地一次性获取所有项目及其关联的章节，按 display_order 排序
+    projects = db.query(Project).options(joinedload(Project.chapters)).order_by(Project.display_order).all()
     
     # 为每个项目计算字数和章节数统计
     for project in projects:
@@ -107,6 +107,14 @@ def get_projects(db: Session = Depends(get_db)):
         project.word_count = sum(c.word_count for c in project.chapters if c.word_count is not None)
     
     return projects
+
+@app.put("/api/projects/reorder")
+def reorder_projects(project_ids: List[int], db: Session = Depends(get_db)):
+    """批量更新项目排序"""
+    for index, project_id in enumerate(project_ids):
+        db.query(Project).filter(Project.id == project_id).update({"display_order": index})
+    db.commit()
+    return {"message": "排序更新成功"}
 
 
 

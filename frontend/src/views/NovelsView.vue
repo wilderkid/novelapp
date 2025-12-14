@@ -18,15 +18,17 @@
     />
 
     <div class="novels-content">
-      <el-table 
-        :data="novels" 
-        style="width: 100%" 
+      <el-table
+        ref="novelTable"
+        :data="novels"
+        style="width: 100%"
         table-layout="fixed"
         v-loading="isLoading"
         element-loading-text="加载小说数据中..."
         element-loading-background="rgba(255, 255, 255, 0.8)"
         aria-label="小说列表"
         role="table"
+        row-key="id"
       >
         <el-table-column prop="title" label="小说标题" show-overflow-tooltip>
           <template #header>
@@ -205,13 +207,14 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onActivated } from 'vue'
+import { ref, onMounted, onActivated, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, View, Edit, Delete, Reading, Collection, User, Document, Tickets, Clock, Timer, Operation, Upload, Download } from '@element-plus/icons-vue'
 import { useProjectStore } from '../stores/projectStore'
 import PageHeader from '../components/PageHeader.vue'
 import axios from 'axios'
+import Sortable from 'sortablejs'
 
 // 状态管理
 const projectStore = useProjectStore()
@@ -238,6 +241,8 @@ const isLoading = ref(false)
 const isSaving = ref(false)
 const isDeleting = ref(false)
 const activeNovelId = ref(null)
+const novelTable = ref(null)
+let sortableInstance = null
 
 // 方法
 const formatWordCount = (count) => {
@@ -404,6 +409,46 @@ const loadNovels = async () => {
   } finally {
     isLoading.value = false;
   }
+  
+  // 初始化拖拽排序
+  await nextTick()
+  initSortable()
+}
+
+const initSortable = () => {
+  if (!novelTable.value) return
+  
+  const tbody = novelTable.value.$el.querySelector('.el-table__body-wrapper tbody')
+  if (!tbody) return
+  
+  if (sortableInstance) {
+    sortableInstance.destroy()
+  }
+  
+  sortableInstance = Sortable.create(tbody, {
+    animation: 150,
+    handle: '.el-table__row',
+    onEnd: async (evt) => {
+      const { oldIndex, newIndex } = evt
+      if (oldIndex === newIndex) return
+      
+      // 更新本地数组
+      const movedItem = novels.value.splice(oldIndex, 1)[0]
+      novels.value.splice(newIndex, 0, movedItem)
+      
+      // 发送新的排序到后端
+      try {
+        const projectIds = novels.value.map(n => n.id)
+        await axios.put('/api/projects/reorder', projectIds)
+        ElMessage.success('排序已保存')
+      } catch (error) {
+        console.error('保存排序失败:', error)
+        ElMessage.error('保存排序失败')
+        // 重新加载以恢复原始顺序
+        await loadNovels()
+      }
+    }
+  })
 }
 
 const loadGenres = async () => {
@@ -501,6 +546,14 @@ onActivated(async () => {
   await loadNovels()
   await loadGenres()
 })
+
+// 组件卸载时销毁 Sortable 实例
+import { onBeforeUnmount } from 'vue'
+onBeforeUnmount(() => {
+  if (sortableInstance) {
+    sortableInstance.destroy()
+  }
+})
 </script>
 
 <style scoped>
@@ -563,6 +616,22 @@ onActivated(async () => {
 :deep(.el-button-group .el-button) {
   padding: 6px 10px;
   font-size: 12px;
+}
+
+/* 拖拽排序样式 */
+:deep(.el-table__row) {
+  cursor: move;
+}
+
+:deep(.sortable-ghost) {
+  opacity: 0.4;
+  background: #f0f9ff;
+}
+
+:deep(.sortable-drag) {
+  opacity: 0.8;
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 /* 响应式设计 */

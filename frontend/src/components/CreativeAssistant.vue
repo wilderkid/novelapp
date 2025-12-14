@@ -181,8 +181,9 @@
             @keydown.enter.prevent="handleEnter"
           />
           <div class="input-actions">
-            <el-button type="primary" @click.stop="sendMessage()" :loading="isLoading" :icon="Promotion">
+            <el-button type="primary" @click.stop="sendMessage()" :loading="isLoading" :disabled="isLoading" :icon="Promotion">
               <span v-if="!isLoading">发送</span>
+              <span v-else>AI正在输出...</span>
             </el-button>
             <el-button
               @click.stop="insertIntoEditor"

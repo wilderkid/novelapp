@@ -203,6 +203,7 @@
             @click="sendMessageStream()"
             class="send-button-icon"
             :loading="isLoading"
+            :disabled="isLoading"
             :icon="Promotion"
             circle
           />

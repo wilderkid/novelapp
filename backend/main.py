@@ -559,6 +559,50 @@ def update_worldview(project_id: int, worldview: WorldviewCreate, db: Session = 
     db.refresh(db_worldview)
     return db_worldview
 
+# 资源排序API（必须在具体资源路由之前定义）
+class ResourceReorderRequest(BaseModel):
+    resource_ids: List[int]
+
+@app.put("/api/rpg_characters/reorder")
+def reorder_rpg_characters(request: ResourceReorderRequest, db: Session = Depends(get_db)):
+    """批量更新角色排序"""
+    for index, resource_id in enumerate(request.resource_ids):
+        db.query(RPGCharacter).filter(RPGCharacter.id == resource_id).update({"display_order": index})
+    db.commit()
+    return {"message": "排序更新成功"}
+
+@app.put("/api/organizations/reorder")
+def reorder_organizations(request: ResourceReorderRequest, db: Session = Depends(get_db)):
+    """批量更新组织排序"""
+    for index, resource_id in enumerate(request.resource_ids):
+        db.query(Organization).filter(Organization.id == resource_id).update({"display_order": index})
+    db.commit()
+    return {"message": "排序更新成功"}
+
+@app.put("/api/supernatural_powers/reorder")
+def reorder_supernatural_powers(request: ResourceReorderRequest, db: Session = Depends(get_db)):
+    """批量更新超凡之力排序"""
+    for index, resource_id in enumerate(request.resource_ids):
+        db.query(SupernaturalPower).filter(SupernaturalPower.id == resource_id).update({"display_order": index})
+    db.commit()
+    return {"message": "排序更新成功"}
+
+@app.put("/api/weapons/reorder")
+def reorder_weapons(request: ResourceReorderRequest, db: Session = Depends(get_db)):
+    """批量更新兵器排序"""
+    for index, resource_id in enumerate(request.resource_ids):
+        db.query(Weapon).filter(Weapon.id == resource_id).update({"display_order": index})
+    db.commit()
+    return {"message": "排序更新成功"}
+
+@app.put("/api/dungeons/reorder")
+def reorder_dungeons(request: ResourceReorderRequest, db: Session = Depends(get_db)):
+    """批量更新副本排序"""
+    for index, resource_id in enumerate(request.resource_ids):
+        db.query(Dungeon).filter(Dungeon.id == resource_id).update({"display_order": index})
+    db.commit()
+    return {"message": "排序更新成功"}
+
 # 角色 (RPGCharacter)
 @app.get("/api/projects/{project_id}/rpg_characters", response_model=List[RPGCharacterResponse])
 def get_rpg_characters(project_id: int, db: Session = Depends(get_db)):
@@ -763,47 +807,6 @@ def delete_dungeon(dungeon_id: int, db: Session = Depends(get_db)):
     db.delete(db_dungeon)
     db.commit()
     return {"message": "副本已删除"}
-
-# 资源排序API
-@app.put("/api/rpg_characters/reorder")
-def reorder_rpg_characters(resource_ids: List[int], db: Session = Depends(get_db)):
-    """批量更新角色排序"""
-    for index, resource_id in enumerate(resource_ids):
-        db.query(RPGCharacter).filter(RPGCharacter.id == resource_id).update({"display_order": index})
-    db.commit()
-    return {"message": "排序更新成功"}
-
-@app.put("/api/organizations/reorder")
-def reorder_organizations(resource_ids: List[int], db: Session = Depends(get_db)):
-    """批量更新组织排序"""
-    for index, resource_id in enumerate(resource_ids):
-        db.query(Organization).filter(Organization.id == resource_id).update({"display_order": index})
-    db.commit()
-    return {"message": "排序更新成功"}
-
-@app.put("/api/supernatural_powers/reorder")
-def reorder_supernatural_powers(resource_ids: List[int], db: Session = Depends(get_db)):
-    """批量更新超凡之力排序"""
-    for index, resource_id in enumerate(resource_ids):
-        db.query(SupernaturalPower).filter(SupernaturalPower.id == resource_id).update({"display_order": index})
-    db.commit()
-    return {"message": "排序更新成功"}
-
-@app.put("/api/weapons/reorder")
-def reorder_weapons(resource_ids: List[int], db: Session = Depends(get_db)):
-    """批量更新兵器排序"""
-    for index, resource_id in enumerate(resource_ids):
-        db.query(Weapon).filter(Weapon.id == resource_id).update({"display_order": index})
-    db.commit()
-    return {"message": "排序更新成功"}
-
-@app.put("/api/dungeons/reorder")
-def reorder_dungeons(resource_ids: List[int], db: Session = Depends(get_db)):
-    """批量更新副本排序"""
-    for index, resource_id in enumerate(resource_ids):
-        db.query(Dungeon).filter(Dungeon.id == resource_id).update({"display_order": index})
-    db.commit()
-    return {"message": "排序更新成功"}
 
 # Conversation History API
 @app.get("/api/conversations", response_model=List[ConversationResponse])

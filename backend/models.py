@@ -74,6 +74,7 @@ class AIProvider(Base):
     base_url = Column(String)
     enabled = Column(Boolean, default=True)
     is_system = Column(Boolean, default=False, nullable=False)
+    display_order = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -130,6 +131,7 @@ class RPGCharacter(Base):
     project_id = Column(Integer, ForeignKey("projects.id"))
     name = Column(String, nullable=False)
     content = Column(Text)
+    display_order = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -142,6 +144,7 @@ class Organization(Base):
     project_id = Column(Integer, ForeignKey("projects.id"))
     name = Column(String, nullable=False)
     content = Column(Text)
+    display_order = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -154,6 +157,7 @@ class SupernaturalPower(Base):
     project_id = Column(Integer, ForeignKey("projects.id"))
     name = Column(String, nullable=False)
     content = Column(Text)
+    display_order = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -166,6 +170,7 @@ class Weapon(Base):
     project_id = Column(Integer, ForeignKey("projects.id"))
     name = Column(String, nullable=False)
     content = Column(Text)
+    display_order = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -177,6 +182,7 @@ class Dungeon(Base):
     project_id = Column(Integer, ForeignKey('projects.id'), nullable=False)
     name = Column(String, nullable=False)
     content = Column(Text)
+    display_order = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     

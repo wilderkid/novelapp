@@ -94,47 +94,72 @@
           </el-input>
         </el-form-item>
         <el-form-item label="内容">
-          <el-input 
-            v-model="currentPrompt.content" 
-            type="textarea" 
-            :rows="10" 
+          <el-input
+            v-model="currentPrompt.content"
+            type="textarea"
+            :rows="10"
             :readonly="isViewing"
-            placeholder="请输入提示词内容，可使用{{变量名}}格式引用资源">
+            placeholder="请输入提示词内容，可使用{{变量名}}格式引用资源"
+            ref="contentTextarea">
           </el-input>
-          <el-button 
+          <el-dropdown
             v-if="!isViewing"
-            type="primary" 
-            size="small" 
-            class="reference-button"
-            @click="openResourceDialog"
+            trigger="click"
+            @command="insertResourceReference"
+            placement="top-start"
+            popper-class="reference-dropdown-popper"
             style="margin-top: 8px;">
-            引用资源
-          </el-button>
+            <el-button type="primary" size="small">
+              引用资源
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <div v-if="!projectStore.currentProject" class="reference-empty">请先选择项目</div>
+                <template v-else>
+                  <div v-if="resourceReferences.worldview" class="provider-group">
+                    <div class="provider-group-title">世界观</div>
+                    <el-dropdown-item command="世界观">世界观</el-dropdown-item>
+                  </div>
+                  <div v-if="resourceReferences.characters.length > 0" class="provider-group">
+                    <div class="provider-group-title">角色</div>
+                    <el-dropdown-item v-for="char in resourceReferences.characters" :key="char.id" :command="char.name">
+                      {{ char.name }}
+                    </el-dropdown-item>
+                  </div>
+                  <div v-if="resourceReferences.organizations.length > 0" class="provider-group">
+                    <div class="provider-group-title">组织</div>
+                    <el-dropdown-item v-for="org in resourceReferences.organizations" :key="org.id" :command="org.name">
+                      {{ org.name }}
+                    </el-dropdown-item>
+                  </div>
+                  <div v-if="resourceReferences.powers.length > 0" class="provider-group">
+                    <div class="provider-group-title">超自然力量</div>
+                    <el-dropdown-item v-for="power in resourceReferences.powers" :key="power.id" :command="power.name">
+                      {{ power.name }}
+                    </el-dropdown-item>
+                  </div>
+                  <div v-if="resourceReferences.weapons.length > 0" class="provider-group">
+                    <div class="provider-group-title">武器</div>
+                    <el-dropdown-item v-for="weapon in resourceReferences.weapons" :key="weapon.id" :command="weapon.name">
+                      {{ weapon.name }}
+                    </el-dropdown-item>
+                  </div>
+                  <div v-if="resourceReferences.dungeons.length > 0" class="provider-group">
+                    <div class="provider-group-title">副本</div>
+                    <el-dropdown-item v-for="dungeon in resourceReferences.dungeons" :key="dungeon.id" :command="dungeon.name">
+                      {{ dungeon.name }}
+                    </el-dropdown-item>
+                  </div>
+                </template>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </el-form-item>
       </el-form>
-      <template #footer v-if="!isViewing" class="dialog-footer">
+      <template #footer v-if="!isViewing">
         <el-button @click="dialogVisible = false">取消</el-button>
         <el-button type="primary" @click="handleSave" :loading="saving">保存</el-button>
       </template>
-    </el-dialog>
-
-    <!-- 资源选择对话框 -->
-    <el-dialog
-      v-model="showResourceDialog"
-      title="选择要引用的资源"
-      width="50%"
-      :close-on-click-modal="false">
-      <div class="resource-list" v-if="resources.length > 0">
-        <div 
-          v-for="resource in resources" 
-          :key="resource.id"
-          class="resource-item"
-          @click="insertResourceReference(resource)">
-          <div class="resource-name">{{ resource.name }}</div>
-          <div class="resource-content">{{ resource.content }}</div>
-        </div>
-      </div>
-      <el-empty v-else description="当前小说暂无资源" />
     </el-dialog>
     </template>
   </div>
@@ -147,6 +172,7 @@ import { useProjectStore } from '../stores/projectStore';
 import { ElMessage, ElMessageBox } from 'element-plus';
 // 图标已替换为SVG，无需导入Element Plus图标
 import axios from 'axios';
+import { worldviewService, characterService, organizationService, supernaturalPowerService, weaponService, dungeonService } from '../services/resourceService';
 
 const API_URL = '/api';
 
@@ -162,10 +188,17 @@ const currentPrompt = ref({});
 const loading = ref(false);
 const saving = ref(false);
 const hoverCard = ref(null);
-const resources = ref([]); // 当前小说的资源列表
-const showResourceDialog = ref(false); // 是否显示资源选择对话框
-const selectedResource = ref(null); // 选中的资源
-const cursorPosition = ref(0); // 文本框中的光标位置
+const contentTextarea = ref(null);
+
+// 引用库数据
+const resourceReferences = ref({
+  worldview: null,
+  characters: [],
+  organizations: [],
+  powers: [],
+  weapons: [],
+  dungeons: []
+});
 
 // 根据提示词名称获取图标
 const getPromptIcon = (name) => {
@@ -221,16 +254,24 @@ const fetchPrompts = async () => {
 };
 
 onMounted(() => {
-  // 监听项目变化，当项目变化时重新获取提示词
   fetchPrompts();
+  loadResourceReferences();
 });
 
-// 监听当前项目变化
 projectStore.$subscribe((mutation, state) => {
   if (state.currentProject) {
     fetchPrompts();
+    loadResourceReferences();
   } else {
     prompts.value = [];
+    resourceReferences.value = {
+      worldview: null,
+      characters: [],
+      organizations: [],
+      powers: [],
+      weapons: [],
+      dungeons: []
+    };
   }
 });
 
@@ -238,56 +279,60 @@ const goToNovels = () => {
   router.push('/novels');
 };
 
-// 获取当前小说的资源
-const fetchResources = async () => {
+// 加载引用库数据
+const loadResourceReferences = async () => {
   if (!projectStore.currentProject) {
-    resources.value = [];
+    resourceReferences.value = {
+      worldview: null,
+      characters: [],
+      organizations: [],
+      powers: [],
+      weapons: [],
+      dungeons: []
+    };
     return;
   }
 
   try {
-    const response = await axios.get(`${API_URL}/projects/${projectStore.currentProject.id}/resources`);
-    resources.value = response.data;
+    const projectId = projectStore.currentProject.id;
+    
+    try {
+      const worldviewRes = await worldviewService.get(projectId);
+      resourceReferences.value.worldview = worldviewRes.data;
+    } catch (e) {
+      resourceReferences.value.worldview = null;
+    }
+
+    const [charsRes, orgsRes, powersRes, weaponsRes, dungeonsRes] = await Promise.all([
+      characterService.getAll(projectId).catch(() => ({ data: [] })),
+      organizationService.getAll(projectId).catch(() => ({ data: [] })),
+      supernaturalPowerService.getAll(projectId).catch(() => ({ data: [] })),
+      weaponService.getAll(projectId).catch(() => ({ data: [] })),
+      dungeonService.getAll(projectId).catch(() => ({ data: [] }))
+    ]);
+
+    resourceReferences.value.characters = charsRes.data;
+    resourceReferences.value.organizations = orgsRes.data;
+    resourceReferences.value.powers = powersRes.data;
+    resourceReferences.value.weapons = weaponsRes.data;
+    resourceReferences.value.dungeons = dungeonsRes.data;
   } catch (error) {
-    console.error('加载资源列表失败:', error);
-    ElMessage.error('加载资源列表失败');
+    console.error('加载引用库失败:', error);
   }
 };
 
-// 打开资源选择对话框
-const openResourceDialog = () => {
-  if (!projectStore.currentProject) {
-    ElMessage.error('请先选择一个小说项目');
-    return;
-  }
-
-  fetchResources();
-  showResourceDialog.value = true;
-};
-
-// 插入资源引用到提示词内容中
-const insertResourceReference = (resource) => {
-  if (!resource) return;
-
-  // 获取当前光标位置
-  const textarea = document.querySelector('.prompt-content-textarea');
+// 插入资源引用
+const insertResourceReference = (name) => {
+  const textarea = contentTextarea.value?.$el?.querySelector('textarea');
   if (!textarea) return;
 
   const start = textarea.selectionStart;
   const end = textarea.selectionEnd;
-  const text = currentPrompt.value.content;
-
-  // 在光标位置插入资源引用
-  const beforeText = text.substring(0, start);
-  const afterText = text.substring(end);
-  const insertText = `{{${resource.name}}}`;
-
-  currentPrompt.value.content = beforeText + insertText + afterText;
-
-  // 关闭对话框
-  showResourceDialog.value = false;
-
-  // 设置光标位置到插入文本之后
+  const text = currentPrompt.value.content || '';
+  
+  const insertText = `{{${name}}}`;
+  currentPrompt.value.content = text.substring(0, start) + insertText + text.substring(end);
+  
   setTimeout(() => {
     textarea.focus();
     textarea.setSelectionRange(start + insertText.length, start + insertText.length);
@@ -658,43 +703,38 @@ const handleSave = async () => {
   }
 }
 
-/* 资源选择对话框样式 */
-.resource-list {
-  max-height: 400px;
-  overflow-y: auto;
-}
-
-.resource-item {
-  padding: 12px;
-  border: 1px solid #ebeef5;
-  border-radius: 6px;
-  margin-bottom: 10px;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.resource-item:hover {
-  background-color: #f5f7fa;
-  border-color: #409eff;
-}
-
-.resource-name {
+/* 下拉菜单分组标题样式 */
+.provider-group-title {
+  color: #909399;
+  font-size: 12px;
+  padding: 8px 20px 4px;
   font-weight: 600;
-  color: #303133;
-  margin-bottom: 6px;
+  pointer-events: none;
+  user-select: none;
 }
 
-.resource-content {
-  color: #606266;
-  font-size: 14px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.provider-group:not(:first-child) .provider-group-title {
+  margin-top: 8px;
+  border-top: 1px solid #ebeef5;
+  padding-top: 12px;
 }
 
-/* 引用资源按钮样式 */
-.reference-button {
-  margin-left: 10px;
+/* 引用库空状态 */
+.reference-empty {
+  padding: 12px 20px;
+  color: #909399;
+  font-size: 13px;
+  text-align: center;
+}
+
+/* 引用库下拉菜单最大高度和滚动 */
+.reference-dropdown-popper {
+  max-height: 400px !important;
+}
+
+.reference-dropdown-popper .el-dropdown-menu {
+  max-height: 400px !important;
+  overflow-y: auto !important;
 }
 
 .prompt-card {

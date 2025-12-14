@@ -60,13 +60,13 @@
       <div class="chat-header">
         <div class="chat-header-left">
           <!-- AI模型选择器 -->
-          <el-dropdown trigger="click" :visible="showAiModelMenu" @update:visible="showAiModelMenu = $event" @command="selectAiModel">
+          <el-dropdown trigger="click" :visible="showAiModelMenu" @update:visible="showAiModelMenu = $event" @command="selectAiModel" popper-class="ai-model-dropdown-popper">
             <h1 class="model-title-dropdown" :class="{ 'is-model-selected': selectedAiModelId }">
               {{ getAiModelName(selectedAiModelId) || '默认模型' }}
               <el-icon class="el-icon--right"><ArrowDown /></el-icon>
             </h1>
             <template #dropdown>
-              <el-dropdown-menu>
+              <el-dropdown-menu class="ai-model-dropdown-menu">
                 <el-dropdown-item command="">默认模型</el-dropdown-item>
                 <div v-for="(models, providerName) in groupedAiModels" :key="providerName" class="provider-group">
                   <div class="provider-group-title">{{ providerName }}</div>
@@ -1410,5 +1410,22 @@ const handleEnter = (e) => {
   background-color: var(--primary-color-light);
   color: var(--primary-color);
   font-weight: 600;
+}
+
+/* AI模型下拉菜单最大高度和滚动 */
+.ai-model-dropdown-popper .ai-model-dropdown-menu {
+  max-height: 500px;
+  overflow-y: auto;
+}
+</style>
+
+<style>
+/* 全局样式，针对 popper 容器 */
+.ai-model-dropdown-popper {
+  max-height: 500px;
+}
+.ai-model-dropdown-popper .el-dropdown-menu {
+  max-height: 500px;
+  overflow-y: auto;
 }
 </style>

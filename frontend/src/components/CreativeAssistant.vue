@@ -99,7 +99,7 @@
                   </el-dropdown-menu>
                 </template>
               </el-dropdown>
-              <el-dropdown trigger="click" @command="selectPromptTemplate">
+              <el-dropdown trigger="click" @command="selectPromptTemplate" placement="top-start" popper-class="prompt-dropdown-popper">
                 <el-button :icon="ChatDotRound" circle size="small" />
                 <template #dropdown>
                   <el-dropdown-menu>
@@ -114,7 +114,7 @@
                   </el-dropdown-menu>
                 </template>
               </el-dropdown>
-              <el-dropdown trigger="click" @command="insertReference">
+              <el-dropdown trigger="click" @command="insertReference" placement="top-start" popper-class="reference-dropdown-popper">
                 <el-button :icon="Link" circle size="small" title="引用库" />
                 <template #dropdown>
                   <el-dropdown-menu>
@@ -1214,6 +1214,26 @@ onUnmounted(() => {
 
 .model-dropdown-popper .el-dropdown-menu__list {
   max-height: 48vh !important;
+  overflow-y: auto !important;
+}
+
+/* 引用库下拉菜单最大高度和滚动 */
+.reference-dropdown-popper {
+  max-height: 400px !important;
+}
+
+.reference-dropdown-popper .el-dropdown-menu {
+  max-height: 400px !important;
+  overflow-y: auto !important;
+}
+
+/* 提示词库下拉菜单最大高度和滚动 */
+.prompt-dropdown-popper {
+  max-height: 400px !important;
+}
+
+.prompt-dropdown-popper .el-dropdown-menu {
+  max-height: 400px !important;
   overflow-y: auto !important;
 }
 </style>

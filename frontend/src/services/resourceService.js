@@ -9,6 +9,7 @@ const resourceApi = (resourceName, pluralName) => ({
   create: (projectId, data) => axios.post(`${API_URL}/projects/${projectId}/${pluralName}`, data),
   update: (id, data) => axios.put(`${API_URL}/${pluralName}/${id}`, data),
   delete: (id) => axios.delete(`${API_URL}/${pluralName}/${id}`),
+  reorder: (ids) => axios.put(`${API_URL}/${pluralName}/reorder`, ids),
 });
 
 export const worldviewService = {

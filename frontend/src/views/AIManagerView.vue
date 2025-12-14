@@ -156,13 +156,19 @@
     </el-dialog>
 
     <el-main class="view-content">
-      <div v-for="provider in filteredProviders" :key="provider.id" class="provider-card">
-        <div class="provider-header">
+      <div v-for="provider in filteredProviders" :key="provider.id" class="provider-card" :data-provider-id="provider.id">
+        <div class="provider-header" @click="toggleProviderCollapse(provider.id)">
           <div class="provider-title">
+            <el-icon class="drag-handle">
+              <DCaret />
+            </el-icon>
+            <el-icon class="collapse-icon" :class="{ 'collapsed': collapsedProviders[provider.id] }">
+              <ArrowDown />
+            </el-icon>
             <span class="provider-name">{{ provider.name }}</span>
             <el-tag v-if="provider.is_system" type="info" size="small">系统</el-tag>
           </div>
-          <div class="provider-actions">
+          <div class="provider-actions" @click.stop>
             <el-button-group>
               <el-tooltip content="编辑提供商" placement="top">
                 <el-button :icon="Edit" size="small" @click="openEditProviderModal(provider)"></el-button>
@@ -174,7 +180,8 @@
             <el-switch v-model="provider.enabled" @change="updateProviderStatus(provider)" style="margin-left: 15px;" />
           </div>
         </div>
-        <div class="provider-body">
+        <el-collapse-transition>
+          <div v-show="!collapsedProviders[provider.id]" class="provider-body">
           <el-form label-position="top">
             <el-form-item label="API Key">
               <el-input v-model="provider.api_key" show-password placeholder="请输入 API Key">
@@ -240,22 +247,25 @@
               </el-table-column>
             </el-table>
           </div>
-        </div>
+          </div>
+        </el-collapse-transition>
       </div>
     </el-main>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watch, reactive, nextTick } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Search, View, Edit, Delete, Warning, Plus, Minus, Setting, Key, SuccessFilled, Operation } from '@element-plus/icons-vue';
+import { Search, View, Edit, Delete, Warning, Plus, Minus, Setting, Key, SuccessFilled, Operation, ArrowDown, DCaret } from '@element-plus/icons-vue';
 import { useProjectStore } from '../stores/projectStore';
 import * as aiService from '../services/aiService';
+import Sortable from 'sortablejs';
 
 const projectStore = useProjectStore();
 const searchQuery = ref('');
-const providers = ref([]); // 使用空数组替代模拟数据
+const providers = ref([]);
+const collapsedProviders = reactive({});
 
 // URL预览相关
 const urlPreview = ref({
@@ -384,9 +394,11 @@ const fetchProviders = async () => {
   try {
     const response = await aiService.getProviders();
     providers.value = response.data;
-    // 获取 providers 后，更新每个 provider 的 URL 预览
     providers.value.forEach(p => {
       updateUrlPreview('card', p);
+      if (collapsedProviders[p.id] === undefined) {
+        collapsedProviders[p.id] = false;
+      }
     });
   } catch (error) {
     ElMessage.error('加载AI提供商失败');
@@ -394,9 +406,40 @@ const fetchProviders = async () => {
   }
 };
 
-onMounted(() => {
-  fetchProviders();
+const toggleProviderCollapse = (providerId) => {
+  collapsedProviders[providerId] = !collapsedProviders[providerId];
+};
+
+onMounted(async () => {
+  await fetchProviders();
+  await nextTick();
+  initSortable();
 });
+
+const initSortable = () => {
+  const container = document.querySelector('.view-content');
+  if (container) {
+    Sortable.create(container, {
+      animation: 150,
+      handle: '.drag-handle',
+      onEnd: async (evt) => {
+        const providerIds = Array.from(container.children)
+          .map(card => parseInt(card.getAttribute('data-provider-id')))
+          .filter(id => !isNaN(id));
+        
+        try {
+          await aiService.reorderProviders(providerIds);
+          ElMessage.success('排序已保存');
+          await fetchProviders();
+        } catch (error) {
+          ElMessage.error('保存排序失败');
+          console.error(error);
+          await fetchProviders();
+        }
+      }
+    });
+  }
+};
 
 // 监听当前项目的变化 (已移除，因为AI管理是全局的)
 // watch(() => projectStore.currentProject?.id, (newId, oldId) => {
@@ -673,9 +716,36 @@ const handleUpdateModel = async () => {
   border-bottom: 1px solid #e4e7ed;
   background-color: #fafafa;
   border-radius: 8px 8px 0 0;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+.provider-header:hover {
+  background-color: #f0f0f0;
+}
+.provider-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.collapse-icon {
+  transition: transform 0.3s ease;
+  font-size: 18px;
+  color: #606266;
+}
+.collapse-icon.collapsed {
+  transform: rotate(-90deg);
+}
+.drag-handle {
+  cursor: move;
+  color: #909399;
+  font-size: 20px;
+  margin-right: 5px;
+}
+.drag-handle:hover {
+  color: #409eff;
 }
 .provider-name {
-  font-size: 1.2em;
+  font-size: 1.1em;
   font-weight: bold;
   color: #303133;
 }

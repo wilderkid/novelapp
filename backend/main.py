@@ -373,7 +373,7 @@ def delete_chapter(chapter_id: int, db: Session = Depends(get_db)):
 @app.get("/api/ai-providers", response_model=List[AIProviderResponse])
 def get_ai_providers(db: Session = Depends(get_db)):
     """获取所有AI提供商"""
-    providers = db.query(AIProvider).all()
+    providers = db.query(AIProvider).order_by(AIProvider.display_order).all()
     return providers
 
 @app.post("/api/ai-providers", response_model=AIProviderResponse)
@@ -384,6 +384,17 @@ def create_ai_provider(provider: AIProviderCreate, db: Session = Depends(get_db)
     db.commit()
     db.refresh(db_provider)
     return db_provider
+
+class ReorderRequest(BaseModel):
+    provider_ids: List[int]
+
+@app.put("/api/ai-providers/reorder")
+def reorder_ai_providers(request: ReorderRequest, db: Session = Depends(get_db)):
+    """批量更新AI提供商排序"""
+    for index, provider_id in enumerate(request.provider_ids):
+        db.query(AIProvider).filter(AIProvider.id == provider_id).update({"display_order": index})
+    db.commit()
+    return {"message": "排序更新成功"}
 
 @app.put("/api/ai-providers/{provider_id}", response_model=AIProviderResponse)
 def update_ai_provider(provider_id: int, provider: AIProviderUpdate, db: Session = Depends(get_db)):
@@ -552,7 +563,7 @@ def update_worldview(project_id: int, worldview: WorldviewCreate, db: Session = 
 @app.get("/api/projects/{project_id}/rpg_characters", response_model=List[RPGCharacterResponse])
 def get_rpg_characters(project_id: int, db: Session = Depends(get_db)):
     """获取项目的所有角色"""
-    return db.query(RPGCharacter).filter(RPGCharacter.project_id == project_id).all()
+    return db.query(RPGCharacter).filter(RPGCharacter.project_id == project_id).order_by(RPGCharacter.display_order).all()
 
 @app.post("/api/projects/{project_id}/rpg_characters", response_model=RPGCharacterResponse)
 def create_rpg_character(project_id: int, character: RPGCharacterCreate, db: Session = Depends(get_db)):
@@ -596,7 +607,7 @@ def delete_rpg_character(character_id: int, db: Session = Depends(get_db)):
 # 组织 (Organization)
 @app.get("/api/projects/{project_id}/organizations", response_model=List[OrganizationResponse])
 def get_organizations(project_id: int, db: Session = Depends(get_db)):
-    return db.query(Organization).filter(Organization.project_id == project_id).all()
+    return db.query(Organization).filter(Organization.project_id == project_id).order_by(Organization.display_order).all()
 
 @app.post("/api/projects/{project_id}/organizations", response_model=OrganizationResponse)
 def create_organization(project_id: int, organization: OrganizationCreate, db: Session = Depends(get_db)):
@@ -636,7 +647,7 @@ def delete_organization(organization_id: int, db: Session = Depends(get_db)):
 # 超凡之力 (SupernaturalPower)
 @app.get("/api/projects/{project_id}/supernatural_powers", response_model=List[SupernaturalPowerResponse])
 def get_supernatural_powers(project_id: int, db: Session = Depends(get_db)):
-    return db.query(SupernaturalPower).filter(SupernaturalPower.project_id == project_id).all()
+    return db.query(SupernaturalPower).filter(SupernaturalPower.project_id == project_id).order_by(SupernaturalPower.display_order).all()
 
 @app.post("/api/projects/{project_id}/supernatural_powers", response_model=SupernaturalPowerResponse)
 def create_supernatural_power(project_id: int, power: SupernaturalPowerCreate, db: Session = Depends(get_db)):
@@ -676,7 +687,7 @@ def delete_supernatural_power(power_id: int, db: Session = Depends(get_db)):
 # 兵器 (Weapon)
 @app.get("/api/projects/{project_id}/weapons", response_model=List[WeaponResponse])
 def get_weapons(project_id: int, db: Session = Depends(get_db)):
-    return db.query(Weapon).filter(Weapon.project_id == project_id).all()
+    return db.query(Weapon).filter(Weapon.project_id == project_id).order_by(Weapon.display_order).all()
 
 @app.post("/api/projects/{project_id}/weapons", response_model=WeaponResponse)
 def create_weapon(project_id: int, weapon: WeaponCreate, db: Session = Depends(get_db)):
@@ -716,7 +727,7 @@ def delete_weapon(weapon_id: int, db: Session = Depends(get_db)):
 # 副本 (Dungeon)
 @app.get("/api/projects/{project_id}/dungeons", response_model=List[DungeonResponse])
 def get_dungeons(project_id: int, db: Session = Depends(get_db)):
-    return db.query(Dungeon).filter(Dungeon.project_id == project_id).all()
+    return db.query(Dungeon).filter(Dungeon.project_id == project_id).order_by(Dungeon.display_order).all()
 
 @app.post("/api/projects/{project_id}/dungeons", response_model=DungeonResponse)
 def create_dungeon(project_id: int, dungeon: DungeonCreate, db: Session = Depends(get_db)):
@@ -752,6 +763,47 @@ def delete_dungeon(dungeon_id: int, db: Session = Depends(get_db)):
     db.delete(db_dungeon)
     db.commit()
     return {"message": "副本已删除"}
+
+# 资源排序API
+@app.put("/api/rpg_characters/reorder")
+def reorder_rpg_characters(resource_ids: List[int], db: Session = Depends(get_db)):
+    """批量更新角色排序"""
+    for index, resource_id in enumerate(resource_ids):
+        db.query(RPGCharacter).filter(RPGCharacter.id == resource_id).update({"display_order": index})
+    db.commit()
+    return {"message": "排序更新成功"}
+
+@app.put("/api/organizations/reorder")
+def reorder_organizations(resource_ids: List[int], db: Session = Depends(get_db)):
+    """批量更新组织排序"""
+    for index, resource_id in enumerate(resource_ids):
+        db.query(Organization).filter(Organization.id == resource_id).update({"display_order": index})
+    db.commit()
+    return {"message": "排序更新成功"}
+
+@app.put("/api/supernatural_powers/reorder")
+def reorder_supernatural_powers(resource_ids: List[int], db: Session = Depends(get_db)):
+    """批量更新超凡之力排序"""
+    for index, resource_id in enumerate(resource_ids):
+        db.query(SupernaturalPower).filter(SupernaturalPower.id == resource_id).update({"display_order": index})
+    db.commit()
+    return {"message": "排序更新成功"}
+
+@app.put("/api/weapons/reorder")
+def reorder_weapons(resource_ids: List[int], db: Session = Depends(get_db)):
+    """批量更新兵器排序"""
+    for index, resource_id in enumerate(resource_ids):
+        db.query(Weapon).filter(Weapon.id == resource_id).update({"display_order": index})
+    db.commit()
+    return {"message": "排序更新成功"}
+
+@app.put("/api/dungeons/reorder")
+def reorder_dungeons(resource_ids: List[int], db: Session = Depends(get_db)):
+    """批量更新副本排序"""
+    for index, resource_id in enumerate(resource_ids):
+        db.query(Dungeon).filter(Dungeon.id == resource_id).update({"display_order": index})
+    db.commit()
+    return {"message": "排序更新成功"}
 
 # Conversation History API
 @app.get("/api/conversations", response_model=List[ConversationResponse])

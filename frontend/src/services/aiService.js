@@ -176,3 +176,7 @@ export const updateModel = (modelId, data) => {
 export const deleteModel = (modelId) => {
   return axios.delete(`${API_URL}/ai-models/${modelId}`);
 };
+
+export const reorderProviders = (providerIds) => {
+  return axios.put(`${API_URL}/ai-providers/reorder`, { provider_ids: providerIds });
+};

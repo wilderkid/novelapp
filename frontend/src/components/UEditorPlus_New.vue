@@ -28,7 +28,7 @@ const props = defineProps({
 })
 
 // 定义emits
-const emit = defineEmits(['update:modelValue', 'ready'])
+const emit = defineEmits(['update:modelValue', 'ready', 'content-change', 'auto-save'])
 
 // 暴露方法给父组件
 defineExpose({
@@ -181,7 +181,9 @@ const initEditor = (initialContent = '') => {
 
         // 监听内容变化
         editor.addListener('contentChange', () => {
-          emit('update:modelValue', editor.getContent());
+          const content = editor.getContent();
+          emit('update:modelValue', content);
+          emit('content-change', content);
         });
 
         // 设置初始内容
@@ -199,8 +201,23 @@ const initEditor = (initialContent = '') => {
         editor.ready(() => {
           isEditorReady = true;
           isEditorInitializing = false;
-          editorStore.setActiveEditorInstance(editor); // 注册编辑器实例
+          editorStore.setActiveEditorInstance(editor);
           emit('ready', editor);
+          
+          // 监听选区变化
+          editor.addListener('selectionchange', () => {
+            const selectedText = editor.selection.getText();
+            if (selectedText && selectedText.trim()) {
+              editorStore.updateCachedSelectedText(selectedText.trim());
+            }
+          });
+          
+          // 监听编辑器自动保存事件
+          setInterval(() => {
+            if (editor && editor.hasContents()) {
+              emit('auto-save');
+            }
+          }, 30000); // 每30秒触发一次自动保存
         });
       } catch (e) {
         console.error('创建编辑器失败', e);
@@ -247,8 +264,10 @@ const editorConfig = {
   initialFrameHeight: 680,
   // 初始容器宽度
   initialFrameWidth: '100%',
-  // 关闭自动保存
-  autoSaveEnable: false,
+  // 启用自动保存
+  autoSaveEnable: true,
+  // 自动保存键（使用章节ID作为唯一标识）
+  autoSaveKey: null,
   // 启用自定义上传服务
   uploadServiceEnable: true,
   // 自定义上传函数

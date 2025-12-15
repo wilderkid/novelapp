@@ -1,16 +1,8 @@
-from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, DateTime, Boolean, Float, JSON
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Boolean, Float, JSON
 from datetime import datetime
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from sqlalchemy.ext.declarative import declarative_base
-Base = declarative_base()
-
-from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, DateTime, Boolean, Float, JSON
-from datetime import datetime
-from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
-from sqlalchemy.ext.declarative import declarative_base
-Base = declarative_base()
+from database import Base
 
 class Project(Base):
     __tablename__ = "projects"
@@ -20,9 +12,9 @@ class Project(Base):
     genre = Column(String, nullable=False)
     description = Column(Text)
     author = Column(String)
-    expected_words = Column(Integer)
+    display_order = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # 关系
 
@@ -48,7 +40,7 @@ class Volume(Base):
     description = Column(Text)
     order = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # 关系
     project = relationship("Project", back_populates="volumes")
@@ -66,7 +58,7 @@ class Chapter(Base):
     word_count = Column(Integer, default=0)
     order = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # 关系
     project = relationship("Project", back_populates="chapters")
@@ -82,8 +74,9 @@ class AIProvider(Base):
     base_url = Column(String)
     enabled = Column(Boolean, default=True)
     is_system = Column(Boolean, default=False, nullable=False)
+    display_order = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     models = relationship("AIModel", back_populates="provider", cascade="all, delete-orphan")
 
@@ -99,7 +92,7 @@ class AIModel(Base):
     is_default = Column(Boolean, default=False)
     enabled = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     provider = relationship("AIProvider", back_populates="models")
 
@@ -115,7 +108,7 @@ class PromptTemplate(Base):
     is_default = Column(Boolean, default=False)
     project_id = Column(Integer, ForeignKey("projects.id"))  # 添加项目ID字段
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     project = relationship("Project", back_populates="prompt_templates")  # 添加与项目的关系
 
@@ -127,7 +120,7 @@ class Worldview(Base):
     project_id = Column(Integer, ForeignKey("projects.id"))
     content = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     project = relationship("Project", back_populates="worldviews")
 
@@ -138,8 +131,9 @@ class RPGCharacter(Base):
     project_id = Column(Integer, ForeignKey("projects.id"))
     name = Column(String, nullable=False)
     content = Column(Text)
+    display_order = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     project = relationship("Project", back_populates="rpg_characters")
 
@@ -150,8 +144,9 @@ class Organization(Base):
     project_id = Column(Integer, ForeignKey("projects.id"))
     name = Column(String, nullable=False)
     content = Column(Text)
+    display_order = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     project = relationship("Project", back_populates="organizations")
 
@@ -162,8 +157,9 @@ class SupernaturalPower(Base):
     project_id = Column(Integer, ForeignKey("projects.id"))
     name = Column(String, nullable=False)
     content = Column(Text)
+    display_order = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     project = relationship("Project", back_populates="supernatural_powers")
 
@@ -174,8 +170,9 @@ class Weapon(Base):
     project_id = Column(Integer, ForeignKey("projects.id"))
     name = Column(String, nullable=False)
     content = Column(Text)
+    display_order = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     project = relationship("Project", back_populates="weapons")
 
@@ -184,8 +181,12 @@ class Dungeon(Base):
     id = Column(Integer, primary_key=True)
     project_id = Column(Integer, ForeignKey('projects.id'), nullable=False)
     name = Column(String, nullable=False)
-    description = Column(Text)
-    project = relationship("Project")
+    content = Column(Text)
+    display_order = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    project = relationship("Project", back_populates="dungeons")
 
 
 class Conversation(Base):
@@ -207,3 +208,11 @@ class Message(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     conversation = relationship("Conversation", back_populates="messages")
+
+class NovelGenre(Base):
+    __tablename__ = "novel_genres"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False, unique=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:9009/api';
+const API_URL = '/api';
 
 // Generic resource handler
 const resourceApi = (resourceName, pluralName) => ({
@@ -9,6 +9,7 @@ const resourceApi = (resourceName, pluralName) => ({
   create: (projectId, data) => axios.post(`${API_URL}/projects/${projectId}/${pluralName}`, data),
   update: (id, data) => axios.put(`${API_URL}/${pluralName}/${id}`, data),
   delete: (id) => axios.delete(`${API_URL}/${pluralName}/${id}`),
+  reorder: (ids) => axios.put(`${API_URL}/${pluralName}/reorder`, { resource_ids: ids }),
 });
 
 export const worldviewService = {

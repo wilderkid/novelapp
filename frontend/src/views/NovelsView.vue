@@ -18,15 +18,17 @@
     />
 
     <div class="novels-content">
-      <el-table 
-        :data="novels" 
-        style="width: 100%" 
+      <el-table
+        ref="novelTable"
+        :data="novels"
+        style="width: 100%"
         table-layout="fixed"
         v-loading="isLoading"
         element-loading-text="加载小说数据中..."
         element-loading-background="rgba(255, 255, 255, 0.8)"
         aria-label="小说列表"
         role="table"
+        row-key="id"
       >
         <el-table-column prop="title" label="小说标题" show-overflow-tooltip>
           <template #header>
@@ -59,7 +61,7 @@
             {{ scope.row.chapterCount || scope.row.chapter_count || 0 }}
           </template>
         </el-table-column>
-        <el-table-column prop="created_at" label="创建时间" width="170">
+        <el-table-column prop="created_at" label="创建时间" width="170" sortable>
           <template #header>
             <el-icon><Clock /></el-icon> 创建时间
           </template>
@@ -67,7 +69,7 @@
             {{ formatDate(scope.row.created_at) }}
           </template>
         </el-table-column>
-        <el-table-column prop="updated_at" label="更新时间" width="170">
+        <el-table-column prop="updated_at" label="更新时间" width="170" sortable>
           <template #header>
             <el-icon><Timer /></el-icon> 更新时间
           </template>
@@ -145,19 +147,21 @@
           />
         </el-form-item>
         <el-form-item label="小说类型" aria-label="小说类型选择框">
-          <el-select 
-            v-model="novelForm.genre" 
-            placeholder="请选择小说类型" 
+          <el-select
+            v-model="novelForm.genre"
+            placeholder="请选择小说类型"
             style="width: 100%"
             :disabled="isSaving"
             aria-label="小说类型选择框"
+            allow-create
+            filterable
           >
-            <el-option label="奇幻" value="奇幻" />
-            <el-option label="科幻" value="科幻" />
-            <el-option label="悬疑" value="悬疑" />
-            <el-option label="言情" value="言情" />
-            <el-option label="历史" value="历史" />
-            <el-option label="其他" value="其他" />
+            <el-option
+              v-for="genre in genreOptions"
+              :key="genre.id"
+              :label="genre.name"
+              :value="genre.name"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="小说描述" aria-label="小说描述输入框">
@@ -171,20 +175,11 @@
           />
         </el-form-item>
         <el-form-item label="作者" aria-label="作者输入框">
-          <el-input 
-            v-model="novelForm.author" 
-            placeholder="请输入作者名称" 
+          <el-input
+            v-model="novelForm.author"
+            placeholder="请输入作者名称"
             :disabled="isSaving"
             aria-label="作者输入框"
-          />
-        </el-form-item>
-        <el-form-item label="预计字数" aria-label="预计字数输入框">
-          <el-input-number 
-            v-model="novelForm.expectedWords" 
-            :min="1000" 
-            :max="10000000" 
-            :disabled="isSaving"
-            aria-label="预计字数输入框"
           />
         </el-form-item>
       </el-form>
@@ -212,13 +207,14 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onActivated } from 'vue'
+import { ref, onMounted, onActivated, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, View, Edit, Delete, Reading, Collection, User, Document, Tickets, Clock, Timer, Operation, Upload, Download } from '@element-plus/icons-vue'
 import { useProjectStore } from '../stores/projectStore'
 import PageHeader from '../components/PageHeader.vue'
 import axios from 'axios'
+import Sortable from 'sortablejs'
 
 // 状态管理
 const projectStore = useProjectStore()
@@ -233,18 +229,20 @@ const novelForm = ref({
   title: '',
   genre: '',
   description: '',
-  author: '',
-  expectedWords: 100000
+  author: ''
 })
 
 // 小说列表
 const novels = ref([])
+const genreOptions = ref([])
 
 // 加载状态
 const isLoading = ref(false)
 const isSaving = ref(false)
 const isDeleting = ref(false)
 const activeNovelId = ref(null)
+const novelTable = ref(null)
+let sortableInstance = null
 
 // 方法
 const formatWordCount = (count) => {
@@ -311,8 +309,7 @@ const saveNovel = async () => {
         title: novelForm.value.title,
         genre: novelForm.value.genre,
         description: novelForm.value.description,
-        author: novelForm.value.author,
-        expectedWords: novelForm.value.expectedWords
+        author: novelForm.value.author
       })
       
       // 更新本地数据
@@ -330,8 +327,7 @@ const saveNovel = async () => {
         title: novelForm.value.title,
         genre: novelForm.value.genre,
         description: novelForm.value.description,
-        author: novelForm.value.author,
-        expectedWords: novelForm.value.expectedWords
+        author: novelForm.value.author
       })
       
       // 添加到本地列表
@@ -387,8 +383,7 @@ const resetForm = () => {
     title: '',
     genre: '',
     description: '',
-    author: '',
-    expectedWords: 100000
+    author: ''
   }
   isEditing.value = false
 }
@@ -413,6 +408,55 @@ const loadNovels = async () => {
     ElMessage.error('加载小说列表失败: ' + (error.response?.data?.detail || error.message))
   } finally {
     isLoading.value = false;
+  }
+  
+  // 初始化拖拽排序
+  await nextTick()
+  initSortable()
+}
+
+const initSortable = () => {
+  if (!novelTable.value) return
+  
+  const tbody = novelTable.value.$el.querySelector('.el-table__body-wrapper tbody')
+  if (!tbody) return
+  
+  if (sortableInstance) {
+    sortableInstance.destroy()
+  }
+  
+  sortableInstance = Sortable.create(tbody, {
+    animation: 150,
+    handle: '.el-table__row',
+    onEnd: async (evt) => {
+      const { oldIndex, newIndex } = evt
+      if (oldIndex === newIndex) return
+      
+      // 更新本地数组
+      const movedItem = novels.value.splice(oldIndex, 1)[0]
+      novels.value.splice(newIndex, 0, movedItem)
+      
+      // 发送新的排序到后端
+      try {
+        const projectIds = novels.value.map(n => n.id)
+        await axios.put('/api/projects/reorder', projectIds)
+        ElMessage.success('排序已保存')
+      } catch (error) {
+        console.error('保存排序失败:', error)
+        ElMessage.error('保存排序失败')
+        // 重新加载以恢复原始顺序
+        await loadNovels()
+      }
+    }
+  })
+}
+
+const loadGenres = async () => {
+  try {
+    const response = await axios.get('/api/novel-genres')
+    genreOptions.value = response.data
+  } catch (error) {
+    console.error('加载小说类型失败:', error)
   }
 }
 
@@ -444,7 +488,6 @@ const exportNovel = async (novel) => {
       genre: novel.genre,
       description: novel.description,
       author: novel.author,
-      expectedWords: novel.expectedWords,
       volumes: volumesWithChapters
     };
 
@@ -494,12 +537,22 @@ const importNovel = () => {
 // 组件挂载时加载数据和重置表单
 onMounted(async () => {
   await loadNovels()
+  await loadGenres()
   resetForm()
 })
 
 // 组件被激活时重新加载数据
 onActivated(async () => {
   await loadNovels()
+  await loadGenres()
+})
+
+// 组件卸载时销毁 Sortable 实例
+import { onBeforeUnmount } from 'vue'
+onBeforeUnmount(() => {
+  if (sortableInstance) {
+    sortableInstance.destroy()
+  }
 })
 </script>
 
@@ -563,6 +616,22 @@ onActivated(async () => {
 :deep(.el-button-group .el-button) {
   padding: 6px 10px;
   font-size: 12px;
+}
+
+/* 拖拽排序样式 */
+:deep(.el-table__row) {
+  cursor: move;
+}
+
+:deep(.sortable-ghost) {
+  opacity: 0.4;
+  background: #f0f9ff;
+}
+
+:deep(.sortable-drag) {
+  opacity: 0.8;
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 /* 响应式设计 */

@@ -60,13 +60,13 @@
       <div class="chat-header">
         <div class="chat-header-left">
           <!-- AI模型选择器 -->
-          <el-dropdown trigger="click" :visible="showAiModelMenu" @update:visible="showAiModelMenu = $event" @command="selectAiModel">
+          <el-dropdown trigger="click" :visible="showAiModelMenu" @update:visible="showAiModelMenu = $event" @command="selectAiModel" popper-class="ai-model-dropdown-popper">
             <h1 class="model-title-dropdown" :class="{ 'is-model-selected': selectedAiModelId }">
               {{ getAiModelName(selectedAiModelId) || '默认模型' }}
               <el-icon class="el-icon--right"><ArrowDown /></el-icon>
             </h1>
             <template #dropdown>
-              <el-dropdown-menu>
+              <el-dropdown-menu class="ai-model-dropdown-menu">
                 <el-dropdown-item command="">默认模型</el-dropdown-item>
                 <div v-for="(models, providerName) in groupedAiModels" :key="providerName" class="provider-group">
                   <div class="provider-group-title">{{ providerName }}</div>
@@ -164,10 +164,10 @@
         </transition-group>
       </div>
       <div class="chat-input-area">
-        <div class="input-area-main">
-          <div class="prompt-selector-wrapper">
+        <div class="input-controls">
+          <div class="control-buttons">
             <el-dropdown trigger="click" :visible="showPromptTemplateMenu" @update:visible="showPromptTemplateMenu = $event" @command="selectPromptTemplate">
-              <el-button :icon="Tickets" circle />
+              <el-button :icon="Tickets" circle size="small" />
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item command="">无提示词</el-dropdown-item>
@@ -181,36 +181,57 @@
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
+            <el-button :icon="Setting" circle size="small" @click="showSettingsDialog = true" />
           </div>
-          <div class="input-wrapper">
-            <el-input
-              v-model="userInput"
-              type="textarea"
-              :rows="2"
-              :autosize="{ minRows: 2, maxRows: 8 }"
-              placeholder="请输入你的问题... (Shift+Enter 换行)"
-              @keydown.enter.prevent="handleEnter"
-            ></el-input>
-            <el-button
-              type="primary"
-              @click="sendMessageStream()"
-              class="send-button-icon"
-              :loading="isLoading"
-              :icon="Promotion"
-              circle
-            />
-          </div>
-        </div>
-        <div class="input-controls">
-          <!-- 提示词选择器 -->
           <div class="control-item">
             <span class="control-label" v-if="selectedPromptTemplateId">
               {{ getPromptTemplateName(selectedPromptTemplateId) }}
             </span>
           </div>
         </div>
+        <div class="input-wrapper">
+          <el-input
+            v-model="userInput"
+            type="textarea"
+            :rows="2"
+            :autosize="{ minRows: 2, maxRows: 8 }"
+            placeholder="请输入你的问题... (Shift+Enter 换行)"
+            @keydown.enter.prevent="handleEnter"
+          ></el-input>
+          <el-button
+            type="primary"
+            @click="sendMessageStream()"
+            class="send-button-icon"
+            :loading="isLoading"
+            :disabled="isLoading"
+            :icon="Promotion"
+            circle
+          />
+        </div>
       </div>
     </div>
+
+    <!-- AI参数设置对话框 -->
+    <el-dialog v-model="showSettingsDialog" title="AI调用参数设置" width="400px">
+      <el-form label-width="100px">
+        <el-form-item label="温度">
+          <el-input-number v-model="aiSettings.temperature" :min="0" :max="1" :step="0.1" :precision="1" />
+          <div class="form-item-tip">控制输出的随机性，0-1之间</div>
+        </el-form-item>
+        <el-form-item label="最大Token">
+          <el-input-number v-model="aiSettings.maxTokens" :min="100" :max="1000000" :step="100" />
+          <div class="form-item-tip">限制AI回复的最大长度</div>
+        </el-form-item>
+        <el-form-item label="记忆轮数">
+          <el-input-number v-model="aiSettings.memoryRounds" :min="1" :max="200" :step="1" />
+          <div class="form-item-tip">保留最近N轮对话作为上下文</div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showSettingsDialog = false">取消</el-button>
+        <el-button type="primary" @click="showSettingsDialog = false">确定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -247,6 +268,14 @@ const selectedConversations = ref([]);
 const showPromptTemplateMenu = ref(false);
 const showAiModelMenu = ref(false);
 
+// AI调用参数设置
+const showSettingsDialog = ref(false);
+const aiSettings = ref({
+  temperature: systemStore.settings.chatDefaults?.temperature ?? 0.7,
+  maxTokens: systemStore.settings.chatDefaults?.maxTokens ?? 2000,
+  memoryRounds: systemStore.settings.chatDefaults?.memoryRounds ?? 10
+});
+
 // -- Computed Properties --
 const groupedAiModels = computed(() => {
   if (!aiModels.value) return {};
@@ -273,7 +302,7 @@ const deleteConversation = async (convId) => {
   )
     .then(async () => {
       try {
-        await axios.delete(`http://localhost:9009/api/conversations/${convId}`);
+        await axios.delete(`/api/conversations/${convId}`);
         ElMessage.success('对话删除成功');
         fetchConversations();
         if (currentConversationId.value === convId) {
@@ -299,7 +328,7 @@ const renameConversation = async (conv) => {
   })
     .then(async ({ value }) => {
       try {
-        await axios.put(`http://localhost:9009/api/conversations/${conv.id}`, { title: value });
+        await axios.put(`/api/conversations/${conv.id}`, { title: value });
         ElMessage.success('对话重命名成功');
         fetchConversations();
       } catch (error) {
@@ -345,7 +374,7 @@ const deleteSelectedConversations = async () => {
         // 批量删除选中的对话
         await Promise.all(
           selectedConversations.value.map(convId =>
-            axios.delete(`http://localhost:9009/api/conversations/${convId}`)
+            axios.delete(`/api/conversations/${convId}`)
           )
         );
         ElMessage.success(`已删除 ${selectedConversations.value.length} 条对话`);
@@ -482,7 +511,7 @@ const getAiModelName = (modelId) => {
 
 const fetchConversations = async () => {
   try {
-    const response = await axios.get(`http://localhost:9009/api/conversations`);
+    const response = await axios.get(`/api/conversations`);
     conversations.value = response.data;
   } catch (error) {
     console.error('Failed to fetch conversations:', error);
@@ -492,7 +521,7 @@ const fetchConversations = async () => {
 
 const fetchPromptTemplates = async () => {
   try {
-    const response = await axios.get(`http://localhost:9009/api/prompt-templates`);
+    const response = await axios.get(`/api/prompt-templates`);
     promptTemplates.value = response.data;
   } catch (error) {
     console.error('Failed to fetch prompt templates:', error);
@@ -503,7 +532,7 @@ const fetchPromptTemplates = async () => {
 const fetchAiModels = async () => {
   try {
     // Get all AI models in one call
-    const response = await axios.get(`http://localhost:9009/api/ai-models`);
+    const response = await axios.get(`/api/ai-models`);
     // 后端已过滤，前端直接使用返回的数据
     aiModels.value = response.data;
   } catch (error) {
@@ -516,6 +545,13 @@ onMounted(() => {
   fetchConversations();
   fetchPromptTemplates();
   fetchAiModels();
+  
+  // 应用默认设置（如果存在）
+  if (systemStore.settings.chatDefaults) {
+    selectedAiModelId.value = systemStore.settings.chatDefaults.aiModelId ?? null;
+    selectedPromptTemplateId.value = systemStore.settings.chatDefaults.promptTemplateId ?? null;
+  }
+  
   startNewChat();
 });
 
@@ -523,8 +559,14 @@ const startNewChat = () => {
   currentConversationId.value = null;
   messages.value = [{ role: 'assistant', content: '你好！有什么可以帮助你的吗？' }];
   userInput.value = '';
-  selectedPromptTemplateId.value = null; // Clear selected prompt on new chat
-  selectedAiModelId.value = null; // Clear selected AI model on new chat
+  // 恢复默认设置而不是清空
+  if (systemStore.settings.chatDefaults) {
+    selectedPromptTemplateId.value = systemStore.settings.chatDefaults.promptTemplateId ?? null;
+    selectedAiModelId.value = systemStore.settings.chatDefaults.aiModelId ?? null;
+  } else {
+    selectedPromptTemplateId.value = null;
+    selectedAiModelId.value = null;
+  }
 };
 
 // Function to clear the current conversation context (keeps the conversation ID but clears messages)
@@ -557,7 +599,7 @@ const clearConversation = () => {
 const loadChat = async (convId) => {
   if (!convId) return;
   try {
-    const response = await axios.get(`http://localhost:9009/api/conversations/${convId}/messages`);
+    const response = await axios.get(`/api/conversations/${convId}/messages`);
     messages.value = response.data.map(m => {
       // 前端统一处理思考和最终内容
       const rawContent = m.content || '';
@@ -632,7 +674,7 @@ const sendMessage = async (messageContent = null) => {
         content: content,
         project_id: currentProject.value.id,
       };
-      const response = await axios.post('http://localhost:9009/api/prompts/render', renderPayload);
+      const response = await axios.post('/api/prompts/render', renderPayload);
       processedUserInput = response.data.rendered_content;
     } catch (error) {
       console.error('Failed to render user input:', error);
@@ -672,7 +714,7 @@ const sendMessage = async (messageContent = null) => {
       project_id: currentProject.value ? currentProject.value.id : null // 添加项目ID
     };
 
-    const response = await axios.post('http://localhost:9009/api/chat', payload);
+    const response = await axios.post('/api/chat', payload);
 
     messages.value[messages.value.length - 1].content = response.data.reply;
 
@@ -765,7 +807,7 @@ const sendMessageStream = async (messageContent = null, updateMessageIndex = nul
         content: content,
         project_id: currentProject.value.id,
       };
-      const response = await axios.post('http://localhost:9009/api/prompts/render', renderPayload);
+      const response = await axios.post('/api/prompts/render', renderPayload);
       processedUserInput = response.data.rendered_content;
     } catch (error) {
       console.error('Failed to render user input:', error);
@@ -796,20 +838,24 @@ const sendMessageStream = async (messageContent = null, updateMessageIndex = nul
       // 不再使用硬编码数据，让后端从数据库中获取
     }
 
+    // 限制历史消息轮数
+    const limitedHistory = actualHistory.slice(-aiSettings.value.memoryRounds * 2);
+    
     // 准备请求参数
     const payload = {
-      message: processedUserInput, // 使用处理后的用户输入
+      message: processedUserInput,
       conversation_id: currentConversationId.value,
-      history: actualHistory.map(m => ({ role: m.role, content: m.content })),
+      history: limitedHistory.map(m => ({ role: m.role, content: m.content })),
       prompt_template_id: selectedPromptTemplateId.value,
       ai_model_id: selectedAiModelId.value,
       resources: resources,
-      project_id: currentProject.value ? currentProject.value.id : null, // 添加项目ID
-      proxy_url: systemStore.settings.proxyUrl || null // 添加代理URL
+      project_id: currentProject.value ? currentProject.value.id : null,
+      temperature: aiSettings.value.temperature,
+      max_tokens: aiSettings.value.maxTokens
     };
 
     // 使用fetch API进行流式请求
-    const response = await fetch('http://localhost:9009/api/chat/stream', {
+    const response = await fetch('/api/chat/stream', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1189,6 +1235,18 @@ const handleEnter = (e) => {
   gap: 8px;
 }
 
+.form-item-tip {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
+}
+
+.control-buttons {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .input-wrapper {
   position: relative;
 }
@@ -1215,6 +1273,8 @@ const handleEnter = (e) => {
 .input-controls {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
 }
 
 .control-item {
@@ -1344,5 +1404,29 @@ const handleEnter = (e) => {
   margin-top: 8px;
   border-top: 1px solid #ebeef5;
   padding-top: 12px;
+}
+
+/* 选中项高亮样式 */
+:deep(.el-dropdown-menu__item.is-active) {
+  background-color: var(--primary-color-light);
+  color: var(--primary-color);
+  font-weight: 600;
+}
+
+/* AI模型下拉菜单最大高度和滚动 */
+.ai-model-dropdown-popper .ai-model-dropdown-menu {
+  max-height: 500px;
+  overflow-y: auto;
+}
+</style>
+
+<style>
+/* 全局样式，针对 popper 容器 */
+.ai-model-dropdown-popper {
+  max-height: 500px;
+}
+.ai-model-dropdown-popper .el-dropdown-menu {
+  max-height: 500px;
+  overflow-y: auto;
 }
 </style>

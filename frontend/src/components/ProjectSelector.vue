@@ -37,9 +37,6 @@
         <el-form-item label="作者">
           <el-input v-model="newProjectForm.author" placeholder="请输入作者名称" />
         </el-form-item>
-        <el-form-item label="预计字数">
-          <el-input-number v-model="newProjectForm.expectedWords" :min="1000" :max="10000000" />
-        </el-form-item>
       </el-form>
       <template #footer>
         <span class="dialog-footer">
@@ -72,8 +69,7 @@ const newProjectForm = ref({
   title: '',
   genre: '',
   description: '',
-  author: '',
-  expectedWords: 100000
+  author: ''
 })
 
 // 计算属性
@@ -133,8 +129,7 @@ const createProject = () => {
     title: '',
     genre: '',
     description: '',
-    author: '',
-    expectedWords: 100000
+    author: ''
   }
 
   ElMessage.success('项目创建成功')

@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:9009/api';
+const API_URL = '/api';
 
 // OpenAI兼容模式URL处理函数
 export const processOpenAIUrl = (userProvidedUrl) => {
@@ -175,4 +175,8 @@ export const updateModel = (modelId, data) => {
 
 export const deleteModel = (modelId) => {
   return axios.delete(`${API_URL}/ai-models/${modelId}`);
+};
+
+export const reorderProviders = (providerIds) => {
+  return axios.put(`${API_URL}/ai-providers/reorder`, { provider_ids: providerIds });
 };

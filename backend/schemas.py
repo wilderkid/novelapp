@@ -13,7 +13,6 @@ class ProjectBase(BaseSchema):
     genre: str
     description: Optional[str] = None
     author: Optional[str] = None
-    expected_words: Optional[int] = None
 
 class ProjectCreate(ProjectBase):
     pass
@@ -260,7 +259,17 @@ class ChatRequest(BaseModel):
     prompt_template_id: Optional[int] = None
     ai_model_id: Optional[int] = None
     resources: Optional[dict] = None
-    proxy_url: Optional[str] = None
+    temperature: Optional[float] = None
+    max_tokens: Optional[int] = None
 
+# 小说类型相关模式
+class NovelGenreBase(BaseSchema):
+    name: str
 
+class NovelGenreCreate(NovelGenreBase):
+    pass
 
+class NovelGenreResponse(NovelGenreBase):
+    id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None

@@ -15,14 +15,14 @@ from pydantic import BaseModel, Field
 from database import SessionLocal, engine, Base
 from sqlalchemy import func
 from models import (
-    Project, Volume, Chapter, 
-    AIProvider, AIModel, PromptTemplate, 
-    Worldview, RPGCharacter, Organization, 
-    SupernaturalPower, Weapon, Dungeon, 
-    Conversation, Message
+    Project, Volume, Chapter,
+    AIProvider, AIModel, PromptTemplate,
+    Worldview, RPGCharacter, Organization,
+    SupernaturalPower, Weapon, Dungeon,
+    Conversation, Message, NovelGenre
 )
 from schemas import (
-    ProjectCreate, ProjectResponse, 
+    ProjectCreate, ProjectResponse,
     VolumeCreate, VolumeResponse,
     ChapterCreate, ChapterResponse,
     AIProviderCreate, AIProviderResponse, AIProviderUpdate,
@@ -34,19 +34,27 @@ from schemas import (
     SupernaturalPowerCreate, SupernaturalPowerResponse,
     WeaponCreate, WeaponResponse,
     DungeonCreate, DungeonResponse,
-    ConversationResponse, MessageResponse, ConversationUpdate
+    ConversationResponse, MessageResponse, ConversationUpdate,
+    NovelGenreCreate, NovelGenreResponse
 )
 
 # 创建数据库表
 Base.metadata.create_all(bind=engine)
 
+# 初始化默认数据
+try:
+    from init_default_data import init_default_data
+    init_default_data()
+except Exception as e:
+    print(f"警告: 初始化默认数据时出错: {e}")
+
 # FastAPI应用
 app = FastAPI(title="StoryForge API", version="1.0.0")
 
-# CORS配置
+# CORS配置 - 允许局域网访问
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["*"],  # 允许所有来源访问
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -63,13 +71,34 @@ def get_db():
     finally:
         db.close()
 
+# URL处理函数 - 与前端保持一致
+def process_openai_url(base_url: str) -> str:
+    """
+    处理OpenAI兼容API的URL，与前端逻辑保持一致
+    规则1: URL以#结尾，移除#后直接使用
+    规则2: URL以/结尾，移除/后补充 /chat/completions
+    规则3: URL不以/结尾，补充 /v1/chat/completions
+    """
+    base_url = base_url.strip()
+    
+    # 规则1: 以#结尾，移除#后直接使用
+    if base_url.endswith('#'):
+        return base_url[:-1]
+    
+    # 规则2: 以/结尾，移除/后补充 /chat/completions
+    if base_url.endswith('/'):
+        return f"{base_url[:-1]}/chat/completions"
+    
+    # 规则3: 不以/结尾，补充 /v1/chat/completions
+    return f"{base_url}/v1/chat/completions"
+
 
 # 项目相关API
 @app.get("/api/projects", response_model=List[ProjectResponse])
 def get_projects(db: Session = Depends(get_db)):
     """获取所有项目"""
-    # 使用 joinedload 高效地一次性获取所有项目及其关联的章节
-    projects = db.query(Project).options(joinedload(Project.chapters)).all()
+    # 使用 joinedload 高效地一次性获取所有项目及其关联的章节，按 display_order 排序
+    projects = db.query(Project).options(joinedload(Project.chapters)).order_by(Project.display_order).all()
     
     # 为每个项目计算字数和章节数统计
     for project in projects:
@@ -78,6 +107,14 @@ def get_projects(db: Session = Depends(get_db)):
         project.word_count = sum(c.word_count for c in project.chapters if c.word_count is not None)
     
     return projects
+
+@app.put("/api/projects/reorder")
+def reorder_projects(project_ids: List[int], db: Session = Depends(get_db)):
+    """批量更新项目排序"""
+    for index, project_id in enumerate(project_ids):
+        db.query(Project).filter(Project.id == project_id).update({"display_order": index})
+    db.commit()
+    return {"message": "排序更新成功"}
 
 
 
@@ -96,7 +133,6 @@ class NovelImport(BaseModel):
     genre: Optional[str] = None
     description: Optional[str] = None
     author: Optional[str] = None
-    expected_words: Optional[int] = Field(None, alias='expectedWords')
     volumes: List[VolumeImport]
 
 @app.post("/api/projects/import", response_model=ProjectResponse)
@@ -108,8 +144,7 @@ def import_project(novel_data: NovelImport, db: Session = Depends(get_db)):
         title=novel_data.title,
         genre=novel_data.genre,
         description=novel_data.description,
-        author=novel_data.author,
-        expected_words=novel_data.expected_words
+        author=novel_data.author
     )
     db.add(db_project)
     db.commit()
@@ -167,6 +202,9 @@ def update_project(project_id: int, project: ProjectCreate, db: Session = Depend
 
     for key, value in project.dict().items():
         setattr(db_project, key, value)
+    
+    # 显式更新 updated_at 字段
+    db_project.updated_at = func.now()
 
     db.commit()
     db.refresh(db_project)
@@ -260,6 +298,13 @@ def create_chapter(volume_id: int, chapter: ChapterCreate, db: Session = Depends
     chapter_data = chapter.dict(exclude={"volume_id"})
     db_chapter = Chapter(project_id=volume.project_id, volume_id=volume_id, **chapter_data)
     db.add(db_chapter)
+    
+    # 同步更新所属项目的 updated_at
+    if volume.project_id:
+        db_project = db.query(Project).filter(Project.id == volume.project_id).first()
+        if db_project:
+            db_project.updated_at = func.now()
+    
     db.commit()
     db.refresh(db_chapter)
     return db_chapter
@@ -291,6 +336,15 @@ def update_chapter(chapter_id: int, chapter: ChapterCreate, db: Session = Depend
 
     for key, value in update_data.items():
         setattr(db_chapter, key, value)
+    
+    # 显式更新章节的 updated_at
+    db_chapter.updated_at = func.now()
+    
+    # 同步更新所属项目的 updated_at
+    if db_chapter.project_id:
+        db_project = db.query(Project).filter(Project.id == db_chapter.project_id).first()
+        if db_project:
+            db_project.updated_at = func.now()
 
     db.commit()
     db.refresh(db_chapter)
@@ -303,31 +357,23 @@ def delete_chapter(chapter_id: int, db: Session = Depends(get_db)):
     if not db_chapter:
         raise HTTPException(status_code=404, detail="章节不存在")
 
+    project_id = db_chapter.project_id
     db.delete(db_chapter)
+    
+    # 同步更新所属项目的 updated_at
+    if project_id:
+        db_project = db.query(Project).filter(Project.id == project_id).first()
+        if db_project:
+            db_project.updated_at = func.now()
+    
     db.commit()
     return {"message": "章节已删除"}
 
-# AI 提供商相关 API - 全局级别
-@app.get("/api/ai-providers", response_model=List[AIProviderResponse])
-def get_global_ai_providers(db: Session = Depends(get_db)):
-    """获取所有AI提供商（全局级别）"""
-    providers = db.query(AIProvider).all()
-    return providers
-
-@app.post("/api/ai-providers", response_model=AIProviderResponse)
-def create_global_ai_provider(provider: AIProviderCreate, db: Session = Depends(get_db)):
-    """创建新的AI提供商（全局级别）"""
-    db_provider = AIProvider(**provider.model_dump())
-    db.add(db_provider)
-    db.commit()
-    db.refresh(db_provider)
-    return db_provider
-
-# AI 提供商相关 API - 项目级别（保持原有功能）
+# AI 提供商相关 API
 @app.get("/api/ai-providers", response_model=List[AIProviderResponse])
 def get_ai_providers(db: Session = Depends(get_db)):
     """获取所有AI提供商"""
-    providers = db.query(AIProvider).all()
+    providers = db.query(AIProvider).order_by(AIProvider.display_order).all()
     return providers
 
 @app.post("/api/ai-providers", response_model=AIProviderResponse)
@@ -338,6 +384,17 @@ def create_ai_provider(provider: AIProviderCreate, db: Session = Depends(get_db)
     db.commit()
     db.refresh(db_provider)
     return db_provider
+
+class ReorderRequest(BaseModel):
+    provider_ids: List[int]
+
+@app.put("/api/ai-providers/reorder")
+def reorder_ai_providers(request: ReorderRequest, db: Session = Depends(get_db)):
+    """批量更新AI提供商排序"""
+    for index, provider_id in enumerate(request.provider_ids):
+        db.query(AIProvider).filter(AIProvider.id == provider_id).update({"display_order": index})
+    db.commit()
+    return {"message": "排序更新成功"}
 
 @app.put("/api/ai-providers/{provider_id}", response_model=AIProviderResponse)
 def update_ai_provider(provider_id: int, provider: AIProviderUpdate, db: Session = Depends(get_db)):
@@ -407,12 +464,10 @@ def delete_ai_model(model_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "AI模型已删除"}
 
-# 获取所有AI模型（包括其提供商信息）- 全局级别
+# 获取所有AI模型（包括其提供商信息）
 @app.get("/api/ai-models", response_model=List[AIModelResponse])
 def get_all_ai_models(db: Session = Depends(get_db)):
     """获取所有AI模型（包括其提供商信息）"""
-    # Get all models from all providers
-    # 使用 joinedload 预加载 provider 关系，并直接在查询中过滤
     models = (
         db.query(AIModel)
         .join(AIProvider)
@@ -423,46 +478,31 @@ def get_all_ai_models(db: Session = Depends(get_db)):
     return models
 
 
-# 提示模板相关API - 全局级别
+# 提示模板相关API
 @app.get("/api/prompt-templates", response_model=List[PromptTemplateResponse])
-def get_global_prompt_templates(db: Session = Depends(get_db)):
-    """获取所有提示模板（全局级别）"""
+def get_prompt_templates(db: Session = Depends(get_db)):
+    """获取所有提示模板"""
     try:
-        # 获取所有提示词模板，包括全局和项目级别的
         templates = db.query(PromptTemplate).all()
         return templates
     except Exception as e:
-        print(f"DEBUG: 查询全局提示词模板时出错: {str(e)}")
-        print(f"DEBUG: 错误类型: {type(e).__name__}")
-        import traceback
-        traceback.print_exc()
+        print(f"查询提示词模板时出错: {str(e)}")
         raise HTTPException(status_code=500, detail=f"内部服务器错误: {str(e)}")
 
 @app.post("/api/prompt-templates", response_model=PromptTemplateResponse)
-def create_global_prompt_template(template: PromptTemplateCreate, db: Session = Depends(get_db)):
-    """创建新的提示模板（全局级别）"""
-    # 创建全局提示词模板，不设置project_id
+def create_prompt_template(template: PromptTemplateCreate, db: Session = Depends(get_db)):
+    """创建新的提示模板"""
     db_template = PromptTemplate(**template.model_dump())
     db.add(db_template)
     db.commit()
     db.refresh(db_template)
     return db_template
 
-# 提示模板相关API - 项目级别（不再支持，因为PromptTemplate已移除project_id字段）
 @app.get("/api/projects/{project_id}/prompt-templates", response_model=List[PromptTemplateResponse])
-def get_prompt_templates(project_id: int, db: Session = Depends(get_db)):
-    """获取项目的所有提示模板（已弃用，返回所有全局提示词模板）"""
+def get_project_prompt_templates(project_id: int, db: Session = Depends(get_db)):
+    """获取项目的所有提示模板（返回所有全局提示词模板）"""
     templates = db.query(PromptTemplate).all()
     return templates
-
-@app.post("/api/projects/{project_id}/prompt-templates", response_model=PromptTemplateResponse)
-def create_prompt_template(project_id: int, template: PromptTemplateCreate, db: Session = Depends(get_db)):
-    """创建新的提示模板（已弃用，创建全局提示词模板）"""
-    db_template = PromptTemplate(**template.model_dump())
-    db.add(db_template)
-    db.commit()
-    db.refresh(db_template)
-    return db_template
 
 @app.put("/api/prompt-templates/{template_id}", response_model=PromptTemplateResponse)
 def update_prompt_template(template_id: int, template: PromptTemplateCreate, db: Session = Depends(get_db)):
@@ -471,7 +511,6 @@ def update_prompt_template(template_id: int, template: PromptTemplateCreate, db:
     if not db_template:
         raise HTTPException(status_code=404, detail="提示模板不存在")
 
-    # 更新模板内容，不修改project_id
     update_data = template.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_template, key, value)
@@ -520,11 +559,55 @@ def update_worldview(project_id: int, worldview: WorldviewCreate, db: Session = 
     db.refresh(db_worldview)
     return db_worldview
 
+# 资源排序API（必须在具体资源路由之前定义）
+class ResourceReorderRequest(BaseModel):
+    resource_ids: List[int]
+
+@app.put("/api/rpg_characters/reorder")
+def reorder_rpg_characters(request: ResourceReorderRequest, db: Session = Depends(get_db)):
+    """批量更新角色排序"""
+    for index, resource_id in enumerate(request.resource_ids):
+        db.query(RPGCharacter).filter(RPGCharacter.id == resource_id).update({"display_order": index})
+    db.commit()
+    return {"message": "排序更新成功"}
+
+@app.put("/api/organizations/reorder")
+def reorder_organizations(request: ResourceReorderRequest, db: Session = Depends(get_db)):
+    """批量更新组织排序"""
+    for index, resource_id in enumerate(request.resource_ids):
+        db.query(Organization).filter(Organization.id == resource_id).update({"display_order": index})
+    db.commit()
+    return {"message": "排序更新成功"}
+
+@app.put("/api/supernatural_powers/reorder")
+def reorder_supernatural_powers(request: ResourceReorderRequest, db: Session = Depends(get_db)):
+    """批量更新超凡之力排序"""
+    for index, resource_id in enumerate(request.resource_ids):
+        db.query(SupernaturalPower).filter(SupernaturalPower.id == resource_id).update({"display_order": index})
+    db.commit()
+    return {"message": "排序更新成功"}
+
+@app.put("/api/weapons/reorder")
+def reorder_weapons(request: ResourceReorderRequest, db: Session = Depends(get_db)):
+    """批量更新兵器排序"""
+    for index, resource_id in enumerate(request.resource_ids):
+        db.query(Weapon).filter(Weapon.id == resource_id).update({"display_order": index})
+    db.commit()
+    return {"message": "排序更新成功"}
+
+@app.put("/api/dungeons/reorder")
+def reorder_dungeons(request: ResourceReorderRequest, db: Session = Depends(get_db)):
+    """批量更新副本排序"""
+    for index, resource_id in enumerate(request.resource_ids):
+        db.query(Dungeon).filter(Dungeon.id == resource_id).update({"display_order": index})
+    db.commit()
+    return {"message": "排序更新成功"}
+
 # 角色 (RPGCharacter)
 @app.get("/api/projects/{project_id}/rpg_characters", response_model=List[RPGCharacterResponse])
 def get_rpg_characters(project_id: int, db: Session = Depends(get_db)):
     """获取项目的所有角色"""
-    return db.query(RPGCharacter).filter(RPGCharacter.project_id == project_id).all()
+    return db.query(RPGCharacter).filter(RPGCharacter.project_id == project_id).order_by(RPGCharacter.display_order).all()
 
 @app.post("/api/projects/{project_id}/rpg_characters", response_model=RPGCharacterResponse)
 def create_rpg_character(project_id: int, character: RPGCharacterCreate, db: Session = Depends(get_db)):
@@ -568,7 +651,7 @@ def delete_rpg_character(character_id: int, db: Session = Depends(get_db)):
 # 组织 (Organization)
 @app.get("/api/projects/{project_id}/organizations", response_model=List[OrganizationResponse])
 def get_organizations(project_id: int, db: Session = Depends(get_db)):
-    return db.query(Organization).filter(Organization.project_id == project_id).all()
+    return db.query(Organization).filter(Organization.project_id == project_id).order_by(Organization.display_order).all()
 
 @app.post("/api/projects/{project_id}/organizations", response_model=OrganizationResponse)
 def create_organization(project_id: int, organization: OrganizationCreate, db: Session = Depends(get_db)):
@@ -608,7 +691,7 @@ def delete_organization(organization_id: int, db: Session = Depends(get_db)):
 # 超凡之力 (SupernaturalPower)
 @app.get("/api/projects/{project_id}/supernatural_powers", response_model=List[SupernaturalPowerResponse])
 def get_supernatural_powers(project_id: int, db: Session = Depends(get_db)):
-    return db.query(SupernaturalPower).filter(SupernaturalPower.project_id == project_id).all()
+    return db.query(SupernaturalPower).filter(SupernaturalPower.project_id == project_id).order_by(SupernaturalPower.display_order).all()
 
 @app.post("/api/projects/{project_id}/supernatural_powers", response_model=SupernaturalPowerResponse)
 def create_supernatural_power(project_id: int, power: SupernaturalPowerCreate, db: Session = Depends(get_db)):
@@ -648,7 +731,7 @@ def delete_supernatural_power(power_id: int, db: Session = Depends(get_db)):
 # 兵器 (Weapon)
 @app.get("/api/projects/{project_id}/weapons", response_model=List[WeaponResponse])
 def get_weapons(project_id: int, db: Session = Depends(get_db)):
-    return db.query(Weapon).filter(Weapon.project_id == project_id).all()
+    return db.query(Weapon).filter(Weapon.project_id == project_id).order_by(Weapon.display_order).all()
 
 @app.post("/api/projects/{project_id}/weapons", response_model=WeaponResponse)
 def create_weapon(project_id: int, weapon: WeaponCreate, db: Session = Depends(get_db)):
@@ -688,7 +771,7 @@ def delete_weapon(weapon_id: int, db: Session = Depends(get_db)):
 # 副本 (Dungeon)
 @app.get("/api/projects/{project_id}/dungeons", response_model=List[DungeonResponse])
 def get_dungeons(project_id: int, db: Session = Depends(get_db)):
-    return db.query(Dungeon).filter(Dungeon.project_id == project_id).all()
+    return db.query(Dungeon).filter(Dungeon.project_id == project_id).order_by(Dungeon.display_order).all()
 
 @app.post("/api/projects/{project_id}/dungeons", response_model=DungeonResponse)
 def create_dungeon(project_id: int, dungeon: DungeonCreate, db: Session = Depends(get_db)):
@@ -784,12 +867,23 @@ def render_prompt(payload: dict, db: Session = Depends(get_db)):
         return {"rendered_content": content}
 
     search_models = [
-        RPGCharacter, Organization, SupernaturalPower, Weapon, Dungeon, Chapter, Volume, Project
+        Worldview, RPGCharacter, Organization, SupernaturalPower, Weapon, Dungeon, Chapter, Volume, Project
     ]
 
     def replacer(match):
         keyword = match.group(1).strip()
+        
+        # 特殊处理世界观：使用固定关键词"世界观"
+        if keyword == "世界观":
+            worldview = db.query(Worldview).filter(Worldview.project_id == project_id).first()
+            if worldview and worldview.content:
+                return str(worldview.content)
+        
         for model in search_models:
+            # 跳过Worldview，因为已经特殊处理
+            if model == Worldview:
+                continue
+                
             query = db.query(model)
             query_attr = 'name' if hasattr(model, 'name') else 'title'
 
@@ -826,7 +920,9 @@ class ChatRequest(BaseModel):
     prompt_template_id: Optional[int] = None
     ai_model_id: Optional[int] = None
     resources: Optional[dict] = None
-    proxy_url: Optional[str] = None
+    temperature: Optional[float] = None
+    max_tokens: Optional[int] = None
+    selected_text: Optional[str] = None # 新增：编辑器中选中的文字
 
 @app.post("/api/chat")
 def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
@@ -844,7 +940,7 @@ def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
         if prompt_template:
             # 使用新的提示词处理函数
             from prompt_utils import process_prompt_template
-            system_prompt = process_prompt_template(db, prompt_template, request.project_id, request.resources)
+            system_prompt = process_prompt_template(db, prompt_template, request.project_id, request.resources, request.selected_text)
 
     if request.ai_model_id:
         selected_ai_model = db.query(AIModel).filter(AIModel.id == request.ai_model_id).first()
@@ -907,7 +1003,7 @@ def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
 
             try:
                 # Default to OpenAI-compatible API if no base_url is provided
-                base_url = selected_ai_provider.base_url or "https://api.openai.com/v1"
+                base_url = selected_ai_provider.base_url or "https://api.openai.com"
                 api_key = selected_ai_provider.api_key
 
                 if not api_key:
@@ -923,8 +1019,8 @@ def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
                     payload = {
                         "model": selected_ai_model.model_identifier,
                         "messages": messages_for_ai,
-                        "temperature": selected_ai_model.temperature,
-                        "max_tokens": selected_ai_model.max_tokens,
+                        "temperature": request.temperature if request.temperature is not None else selected_ai_model.temperature,
+                        "max_tokens": request.max_tokens if request.max_tokens is not None else selected_ai_model.max_tokens,
                     }
 
                     # Check if this is a thinking model and add enable_thinking parameter
@@ -932,9 +1028,8 @@ def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
                     if is_thinking_model:
                         payload["extra_body"] = {"enable_thinking": True}
 
-                    # Determine the correct endpoint URL
-                    # For most OpenAI-compatible APIs, it's chat/completions
-                    api_endpoint = f"{base_url.rstrip('/')}/chat/completions"
+                    # 使用与前端一致的URL处理逻辑
+                    api_endpoint = process_openai_url(base_url)
 
                     # 添加详细的调用日志
                     import datetime
@@ -956,13 +1051,11 @@ def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
 
                     # Make the HTTP request to the AI provider
                     import requests
-                    proxies = {"http://": request.proxy_url, "https://": request.proxy_url} if request.proxy_url else None
                     response = requests.post(
                         api_endpoint,
                         json=payload,
                         headers=headers,
-                        timeout=30.0,  # 30 second timeout
-                        proxies=proxies
+                        timeout=30.0  # 30 second timeout
                     )
 
                     print(f"响应状态码: {response.status_code}")
@@ -1024,7 +1117,7 @@ def chat_with_ai_stream(request: ChatRequest, db: Session = Depends(get_db)):
         if prompt_template:
             # 使用新的提示词处理函数
             from prompt_utils import process_prompt_template
-            system_prompt = process_prompt_template(db, prompt_template, request.project_id, request.resources)
+            system_prompt = process_prompt_template(db, prompt_template, request.project_id, request.resources, request.selected_text)
 
     if request.ai_model_id:
         selected_ai_model = db.query(AIModel).filter(AIModel.id == request.ai_model_id).first()
@@ -1112,9 +1205,10 @@ def chat_with_ai_stream(request: ChatRequest, db: Session = Depends(get_db)):
         messages_for_ai.append({"role": "user", "content": request.message})
 
         # 准备API请求
-        base_url = selected_ai_provider.base_url or "https://api.openai.com/v1"
+        base_url = selected_ai_provider.base_url or "https://api.openai.com"
         api_key = selected_ai_provider.api_key
-        api_endpoint = f"{base_url.rstrip('/')}/chat/completions"
+        # 使用与前端一致的URL处理逻辑
+        api_endpoint = process_openai_url(base_url)
         
         print(f"[API请求] 完整的API端点: {api_endpoint}")
         print(f"[API请求] 基础URL: {base_url}")
@@ -1128,8 +1222,8 @@ def chat_with_ai_stream(request: ChatRequest, db: Session = Depends(get_db)):
         payload = {
             "model": selected_ai_model.model_identifier,
             "messages": messages_for_ai,
-            "temperature": selected_ai_model.temperature,
-            "max_tokens": selected_ai_model.max_tokens,
+            "temperature": request.temperature if request.temperature is not None else selected_ai_model.temperature,
+            "max_tokens": request.max_tokens if request.max_tokens is not None else selected_ai_model.max_tokens,
             "stream": True  # 启用流式响应
         }
 
@@ -1143,31 +1237,11 @@ def chat_with_ai_stream(request: ChatRequest, db: Session = Depends(get_db)):
         import os
 
         try:
-            # 配置代理 - 使用 httpx 的 proxy 参数（单数形式）
-            client_kwargs = {"timeout": 60.0}
-            
-            if request.proxy_url:
-                # 用户手动配置了代理
-                client_kwargs["proxy"] = request.proxy_url
-                print(f"[代理配置] 使用手动配置的代理: {request.proxy_url}")
-            else:
-                # 尝试使用系统代理设置
-                system_proxy = os.environ.get('HTTP_PROXY') or os.environ.get('http_proxy') or \
-                               os.environ.get('HTTPS_PROXY') or os.environ.get('https_proxy')
-                if system_proxy:
-                    client_kwargs["proxy"] = system_proxy
-                    print(f"[代理配置] 使用系统代理: {system_proxy}")
-                else:
-                    # 在 Windows 上，httpx 默认会尝试使用系统代理
-                    # 我们设置 trust_env=True 来启用这个行为
-                    client_kwargs["trust_env"] = True
-                    print("[代理配置] 使用系统默认代理设置")
-
             print(f"[HTTP请求] 准备发送请求到: {api_endpoint}")
             print(f"[HTTP请求] 请求头: {headers}")
             print(f"[HTTP请求] 请求体: {json.dumps(payload, ensure_ascii=False)[:500]}")
             
-            async with httpx.AsyncClient(**client_kwargs) as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 async with client.stream(
                     "POST",
                     api_endpoint,
@@ -1430,9 +1504,44 @@ def chat_with_ai_stream(request: ChatRequest, db: Session = Depends(get_db)):
 
     return {"reply": ai_reply_content, "conversation_id": conversation_id}
 
+# 小说类型管理API
+@app.get("/api/novel-genres", response_model=List[NovelGenreResponse])
+def get_novel_genres(db: Session = Depends(get_db)):
+    """获取所有小说类型"""
+    genres = db.query(NovelGenre).all()
+    return genres
 
+@app.post("/api/novel-genres", response_model=NovelGenreResponse)
+def create_novel_genre(genre: NovelGenreCreate, db: Session = Depends(get_db)):
+    """创建新的小说类型"""
+    db_genre = NovelGenre(**genre.model_dump())
+    db.add(db_genre)
+    db.commit()
+    db.refresh(db_genre)
+    return db_genre
 
+@app.put("/api/novel-genres/{genre_id}", response_model=NovelGenreResponse)
+def update_novel_genre(genre_id: int, genre: NovelGenreCreate, db: Session = Depends(get_db)):
+    """更新小说类型"""
+    db_genre = db.query(NovelGenre).filter(NovelGenre.id == genre_id).first()
+    if not db_genre:
+        raise HTTPException(status_code=404, detail="小说类型不存在")
+    
+    db_genre.name = genre.name
+    db.commit()
+    db.refresh(db_genre)
+    return db_genre
 
+@app.delete("/api/novel-genres/{genre_id}")
+def delete_novel_genre(genre_id: int, db: Session = Depends(get_db)):
+    """删除小说类型"""
+    db_genre = db.query(NovelGenre).filter(NovelGenre.id == genre_id).first()
+    if not db_genre:
+        raise HTTPException(status_code=404, detail="小说类型不存在")
+    
+    db.delete(db_genre)
+    db.commit()
+    return {"message": "小说类型已删除"}
 
 # 启动服务器
 if __name__ == "__main__":

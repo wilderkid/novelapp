@@ -17,8 +17,16 @@
       </div>
 
       <div class="content-main">
+        <!-- 侧边栏收缩按钮 -->
+        <div class="sidebar-toggle" @click="toggleSidebar">
+          <el-icon>
+            <DArrowLeft v-if="sidebarCollapsed" />
+            <DArrowRight v-else />
+          </el-icon>
+        </div>
+
         <!-- 左侧分卷和章节树形列表 -->
-        <div class="sidebar" :style="{ width: sidebarWidth + 'px' }">
+        <div class="sidebar" v-show="!sidebarCollapsed" :style="{ width: sidebarWidth + 'px' }">
           <div class="sidebar-header">
             <h3>分卷与章节</h3>
             <div class="sidebar-actions">
@@ -93,6 +101,7 @@
             <div class="editor-header">
               <el-input v-model="currentChapter.title" placeholder="章节标题" class="title-input" />
               <div class="editor-actions">
+                <el-button @click="showResourceDrawer = true" :icon="View">查看资源</el-button>
                 <el-button @click="saveCurrentChapter">保存</el-button>
               </div>
             </div>
@@ -102,6 +111,7 @@
                 v-model="currentChapter.content"
                 editor-id="chapter-editor"
                 @ready="onEditorReady"
+                @auto-save="autoSaveChapter"
               />
             </div>
           </div>
@@ -240,20 +250,87 @@
           </div>
         </div>
       </el-dialog>
+
+      <!-- 资源查看侧边栏 -->
+      <el-drawer
+        v-model="showResourceDrawer"
+        title="资源管理"
+        direction="rtl"
+        size="400px"
+      >
+        <div class="resource-drawer-content">
+          <el-collapse v-model="activeResourceTypes" accordion>
+            <el-collapse-item title="角色" name="characters">
+              <ul class="resource-readonly-list">
+                <li v-for="item in resourceData.characters" :key="item.id" @click="viewResourceDetail('characters', item)">
+                  <span class="resource-name">{{ item.name }}</span>
+                  <el-icon><ArrowRight /></el-icon>
+                </li>
+              </ul>
+            </el-collapse-item>
+            <el-collapse-item title="组织" name="organizations">
+              <ul class="resource-readonly-list">
+                <li v-for="item in resourceData.organizations" :key="item.id" @click="viewResourceDetail('organizations', item)">
+                  <span class="resource-name">{{ item.name }}</span>
+                  <el-icon><ArrowRight /></el-icon>
+                </li>
+              </ul>
+            </el-collapse-item>
+            <el-collapse-item title="超凡力量" name="powers">
+              <ul class="resource-readonly-list">
+                <li v-for="item in resourceData.powers" :key="item.id" @click="viewResourceDetail('powers', item)">
+                  <span class="resource-name">{{ item.name }}</span>
+                  <el-icon><ArrowRight /></el-icon>
+                </li>
+              </ul>
+            </el-collapse-item>
+            <el-collapse-item title="武器" name="weapons">
+              <ul class="resource-readonly-list">
+                <li v-for="item in resourceData.weapons" :key="item.id" @click="viewResourceDetail('weapons', item)">
+                  <span class="resource-name">{{ item.name }}</span>
+                  <el-icon><ArrowRight /></el-icon>
+                </li>
+              </ul>
+            </el-collapse-item>
+            <el-collapse-item title="副本" name="dungeons">
+              <ul class="resource-readonly-list">
+                <li v-for="item in resourceData.dungeons" :key="item.id" @click="viewResourceDetail('dungeons', item)">
+                  <span class="resource-name">{{ item.name }}</span>
+                  <el-icon><ArrowRight /></el-icon>
+                </li>
+              </ul>
+            </el-collapse-item>
+          </el-collapse>
+        </div>
+      </el-drawer>
+
+      <!-- 资源详情对话框 -->
+      <el-dialog
+        v-model="showResourceDetailDialog"
+        :title="currentResourceDetail?.name"
+        width="600px"
+      >
+        <el-descriptions :column="1" border v-if="currentResourceDetail">
+          <el-descriptions-item v-for="(value, key) in getResourceFields(currentResourceDetail)" :key="key" :label="key">
+            <div class="resource-field-content" v-html="value"></div>
+          </el-descriptions-item>
+        </el-descriptions>
+      </el-dialog>
     </template>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch, computed, nextTick } from 'vue'
+import { ref, reactive, onMounted, watch, computed, nextTick, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, View, Edit, Delete, List, Document, DocumentCopy, Timer } from '@element-plus/icons-vue'
+import { Plus, View, Edit, Delete, List, Document, DocumentCopy, Timer, DArrowLeft, DArrowRight, ArrowRight } from '@element-plus/icons-vue'
 import { useEditorStore } from '../stores/editorStore'
 import { useProjectStore } from '../stores/projectStore'
 import UEditorPlus from '../components/UEditorPlus_New.vue'
 import chapterService from '../services/chapterService'
 import volumeService from '../services/volumeService'
+import { characterService, organizationService, supernaturalPowerService, weaponService, dungeonService } from '../services/resourceService'
 
 // 状态管理
 const router = useRouter()
@@ -267,6 +344,21 @@ const showVolumeDetailDialog = ref(false)
 const isEditingVolume = ref(false)
 const isEditingChapter = ref(false)
 const isVolumeSelectable = ref(true)
+
+// 资源侧边栏状态
+const showResourceDrawer = ref(false)
+const activeResourceTypes = ref(['characters'])
+const resourceData = ref({
+  characters: [],
+  organizations: [],
+  powers: [],
+  weapons: [],
+  dungeons: []
+})
+
+// 资源详情对话框
+const showResourceDetailDialog = ref(false)
+const currentResourceDetail = ref(null)
 
 // 分卷表单
 const volumeForm = ref({
@@ -318,6 +410,10 @@ const currentVolumeId = ref(null)
 
 // 当前编辑的章节
 const currentChapter = ref(null)
+
+// 自动保存相关
+const isSaving = ref(false)
+const lastSaveTime = ref(null)
 
 // 分卷数据
 const volumes = ref([
@@ -388,9 +484,15 @@ const editorContainer = ref(null)
 
 // 容器宽度调整
 const sidebarWidth = ref(300)
+const sidebarCollapsed = ref(false)
 const isResizing = ref(false)
 const startX = ref(0)
 const startWidth = ref(0)
+
+// 切换侧边栏显示/隐藏
+const toggleSidebar = () => {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+}
 
 // 拖动排序相关
 const treeContainer = ref(null)
@@ -541,7 +643,61 @@ const loadVolumesAndChapters = async () => {
   }
 }
 
-// 保存当前章节
+// 加载资源数据
+const loadResourceData = async () => {
+  if (!projectStore.currentProject) return
+  
+  try {
+    const [characters, organizations, powers, weapons, dungeons] = await Promise.all([
+      characterService.getAll(projectStore.currentProject.id),
+      organizationService.getAll(projectStore.currentProject.id),
+      supernaturalPowerService.getAll(projectStore.currentProject.id),
+      weaponService.getAll(projectStore.currentProject.id),
+      dungeonService.getAll(projectStore.currentProject.id)
+    ])
+    
+    resourceData.value = {
+      characters: characters.data,
+      organizations: organizations.data,
+      powers: powers.data,
+      weapons: weapons.data,
+      dungeons: dungeons.data
+    }
+  } catch (error) {
+    console.error('加载资源数据失败:', error)
+  }
+}
+
+// 自动保存章节
+const autoSaveChapter = async () => {
+  if (!currentChapter.value || isSaving.value) return
+  
+  try {
+    isSaving.value = true
+    
+    // 计算字数
+    const content = currentChapter.value.content || ''
+    const textContent = content.replace(/<[^>]*>/g, '').trim()
+    const wordCount = textContent.length || 0
+    currentChapter.value.wordCount = wordCount
+    
+    // 保存到数据库
+    await chapterService.saveChapter(currentChapter.value)
+    
+    lastSaveTime.value = new Date()
+    ElMessage.success({
+      message: '自动保存成功',
+      duration: 1000,
+      showClose: false
+    })
+  } catch (error) {
+    console.error('自动保存失败:', error)
+  } finally {
+    isSaving.value = false
+  }
+}
+
+// 保存当前章节（手动保存）
 const saveCurrentChapter = async () => {
   if (!currentChapter.value) return
 
@@ -551,6 +707,8 @@ const saveCurrentChapter = async () => {
   }
 
   try {
+    isSaving.value = true
+    
     // 计算字数（移除HTML标签后）
     const content = currentChapter.value.content || ''
     const textContent = content.replace(/<[^>]*>/g, '').trim()
@@ -567,11 +725,14 @@ const saveCurrentChapter = async () => {
 
     // 更新当前编辑的章节
     currentChapter.value = savedChapter
-
+    
+    lastSaveTime.value = new Date()
     ElMessage.success('章节已保存到数据库')
   } catch (error) {
     console.error('保存章节失败:', error)
     ElMessage.error('保存章节失败: ' + (error.response?.data?.message || error.message))
+  } finally {
+    isSaving.value = false
   }
 }
 
@@ -696,13 +857,23 @@ const saveVolume = async () => {
       console.log('自动计算分卷序号:', nextOrder)
     }
 
-    // 添加项目ID和自动计算的序号
-    // 创建新分卷时，移除id字段（因为id由数据库自动生成）
-    const { id, ...volumeDataWithoutId } = volumeForm.value
-    const volumeData = {
-      ...volumeDataWithoutId,
-      order: nextOrder,
-      project_id: projectStore.currentProject.id
+    // 准备保存数据
+    let volumeData
+    if (isEditingVolume.value) {
+      // 编辑模式：保留id字段
+      volumeData = {
+        ...volumeForm.value,
+        order: nextOrder,
+        project_id: projectStore.currentProject.id
+      }
+    } else {
+      // 创建模式：移除id字段
+      const { id, ...volumeDataWithoutId } = volumeForm.value
+      volumeData = {
+        ...volumeDataWithoutId,
+        order: nextOrder,
+        project_id: projectStore.currentProject.id
+      }
     }
 
     // 保存到数据库
@@ -1160,6 +1331,83 @@ watch(() => projectStore.currentProject, (newProject) => {
     loadVolumesAndChapters()
   }
 }, { immediate: true })
+
+// 监听资源侧边栏打开，加载资源数据
+watch(showResourceDrawer, (newVal) => {
+  if (newVal) {
+    loadResourceData()
+  }
+})
+
+// 查看资源详情
+const viewResourceDetail = async (type, item) => {
+  try {
+    let service
+    switch(type) {
+      case 'characters':
+        service = characterService
+        break
+      case 'organizations':
+        service = organizationService
+        break
+      case 'powers':
+        service = supernaturalPowerService
+        break
+      case 'weapons':
+        service = weaponService
+        break
+      case 'dungeons':
+        service = dungeonService
+        break
+    }
+    
+    const response = await service.get(item.id)
+    currentResourceDetail.value = response.data
+    showResourceDetailDialog.value = true
+  } catch (error) {
+    console.error('加载资源详情失败:', error)
+    ElMessage.error('加载资源详情失败')
+  }
+}
+
+// 获取资源字段（过滤掉不需要显示的字段）
+const getResourceFields = (resource) => {
+  const excludeFields = ['id', 'project_id', 'created_at', 'updated_at', 'display_order']
+  const fieldLabels = {
+    name: '名称',
+    description: '描述',
+    age: '年龄',
+    gender: '性别',
+    appearance: '外貌',
+    personality: '性格',
+    background: '背景',
+    abilities: '能力',
+    relationships: '关系',
+    leader: '领导者',
+    members: '成员',
+    goals: '目标',
+    history: '历史',
+    type: '类型',
+    effects: '效果',
+    limitations: '限制',
+    damage: '伤害',
+    range: '范围',
+    special_properties: '特殊属性',
+    location: '位置',
+    difficulty: '难度',
+    monsters: '怪物',
+    rewards: '奖励',
+    notes: '备注'
+  }
+  
+  const fields = {}
+  for (const [key, value] of Object.entries(resource)) {
+    if (!excludeFields.includes(key) && value !== null && value !== '') {
+      fields[fieldLabels[key] || key] = value
+    }
+  }
+  return fields
+}
 </script>
 
 <style scoped>
@@ -1432,6 +1680,12 @@ watch(() => projectStore.currentProject, (newProject) => {
   color: #1890ff;
 }
 
+/* 资源详情内容保留换行 */
+.resource-field-content {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
   .chapters-container {
@@ -1462,5 +1716,37 @@ watch(() => projectStore.currentProject, (newProject) => {
   .title-input {
     width: 100%;
   }
+}
+
+/* 资源侧边栏样式 */
+.resource-drawer-content {
+  padding: 0;
+}
+
+.resource-readonly-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.resource-readonly-list li {
+  padding: 8px 12px;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.resource-readonly-list li:last-child {
+  border-bottom: none;
+}
+
+.resource-readonly-list li:hover {
+  background-color: #f5f7fa;
+}
+
+.resource-name {
+  flex: 1;
 }
 </style>

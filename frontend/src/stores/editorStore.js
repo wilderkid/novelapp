@@ -8,6 +8,7 @@ export const useEditorStore = defineStore('editor', () => {
   const activeChapterId = ref(null)
   const activeEditorInstance = ref(null) // 新增：存储当前激活的编辑器实例
   const creativeAssistantVisible = ref(false) // 新增：控制AI助手侧边栏的显示与隐藏
+  const cachedSelectedText = ref('') // 新增：缓存编辑器中选中的文字
 
   // 计算属性
   const activeChapter = computed(() => {
@@ -92,6 +93,21 @@ export const useEditorStore = defineStore('editor', () => {
     return { success: false, message: '没有检测到活动的编辑器' };
   }
 
+  // 获取编辑器中选中的文字（返回缓存的文字）
+  const getSelectedText = () => {
+    return cachedSelectedText.value;
+  }
+
+  // 更新缓存的选中文字
+  const updateCachedSelectedText = (text) => {
+    cachedSelectedText.value = text;
+  }
+
+  // 清除缓存的选中文字
+  const clearCachedSelectedText = () => {
+    cachedSelectedText.value = '';
+  }
+
   // 切换AI助手侧边栏的可见性
   const toggleCreativeAssistant = () => {
     creativeAssistantVisible.value = !creativeAssistantVisible.value;
@@ -104,6 +120,7 @@ export const useEditorStore = defineStore('editor', () => {
     maxOpenChapters,
     activeEditorInstance, // 新增
     creativeAssistantVisible, // 新增
+    cachedSelectedText, // 新增
 
     // 计算属性
     activeChapter,
@@ -121,6 +138,9 @@ export const useEditorStore = defineStore('editor', () => {
     setActiveEditorInstance,
     clearActiveEditorInstance,
     insertContent,
+    getSelectedText,
+    updateCachedSelectedText,
+    clearCachedSelectedText,
     toggleCreativeAssistant
   }
 })

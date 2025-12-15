@@ -27,12 +27,6 @@ const router = createRouter({
       name: 'prompts',
       component: () => import('../views/PromptView.vue')
     },
-
-    {
-      path: '/settings',
-      name: 'settings',
-      component: () => import('../views/SettingsView.vue')
-    },
     {
       path: '/ai-management',
       name: 'ai-management',
@@ -42,6 +36,11 @@ const router = createRouter({
       path: '/chat',
       name: 'chat',
       component: () => import('@/views/ChatView.vue')
+    },
+    {
+      path: '/system',
+      name: 'system',
+      component: () => import('@/views/SystemSettingsView.vue')
     }
   ]
 })

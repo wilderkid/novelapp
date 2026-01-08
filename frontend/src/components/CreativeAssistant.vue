@@ -509,12 +509,13 @@ const sendMessage = async (messageContent = null, updateMessageIndex = null) => 
 
   let processedUserInput = content;
 
-  // 如果用户输入包含变量且有项目上下文，则先进行渲染
-  if (content.includes('{{') && currentProject.value) {
+  // 如果用户输入包含变量，则先进行渲染
+  if (content.includes('{{')) {
     try {
       const renderPayload = {
         content: content,
-        project_id: currentProject.value.id,
+        project_id: currentProject.value ? currentProject.value.id : null,
+        selected_text: cachedSelectedText.value || null
       };
       const response = await axios.post('/api/prompts/render', renderPayload);
       processedUserInput = response.data.rendered_content;

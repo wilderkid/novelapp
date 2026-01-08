@@ -862,8 +862,13 @@ def render_prompt(payload: dict, db: Session = Depends(get_db)):
     import re
     content = payload.get("content", "")
     project_id = payload.get("project_id")
+    selected_text = payload.get("selected_text")
 
-    if not project_id or '{{' not in content:
+    if '{{' not in content:
+        return {"rendered_content": content}
+    
+    # 如果没有项目ID但有选择文字，仍然需要渲染
+    if not project_id and not selected_text:
         return {"rendered_content": content}
 
     search_models = [
@@ -873,11 +878,20 @@ def render_prompt(payload: dict, db: Session = Depends(get_db)):
     def replacer(match):
         keyword = match.group(1).strip()
         
+        # 特殊处理：选择文字
+        if keyword == "选择文字":
+            if selected_text:
+                return str(selected_text)
+            return match.group(0)
+        
         # 特殊处理世界观：使用固定关键词"世界观"
-        if keyword == "世界观":
+        if keyword == "世界观" and project_id:
             worldview = db.query(Worldview).filter(Worldview.project_id == project_id).first()
             if worldview and worldview.content:
                 return str(worldview.content)
+        
+        if not project_id:
+            return match.group(0)
         
         for model in search_models:
             # 跳过Worldview，因为已经特殊处理

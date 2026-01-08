@@ -309,6 +309,7 @@
         v-model="showResourceDetailDialog"
         :title="currentResourceDetail?.name"
         width="600px"
+        class="resource-detail-dialog"
       >
         <el-descriptions :column="1" border v-if="currentResourceDetail">
           <el-descriptions-item v-for="(value, key) in getResourceFields(currentResourceDetail)" :key="key" :label="key">
@@ -1680,10 +1681,94 @@ const getResourceFields = (resource) => {
   color: #1890ff;
 }
 
-/* 资源详情内容保留换行 */
+/* 资源详情对话框 */
+.resource-detail-dialog :deep(.el-dialog) {
+  max-width: 600px;
+}
+
+.resource-detail-dialog :deep(.el-dialog__body) {
+  max-height: 70vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  width: 100%;
+}
+
+/* 强制表格使用固定布局 */
+.resource-detail-dialog :deep(.el-descriptions) {
+  width: 100%;
+  overflow: hidden;
+}
+
+.resource-detail-dialog :deep(.el-descriptions__table) {
+  table-layout: fixed !important;
+  width: 100% !important;
+}
+
+/* 标签列固定宽度 */
+.resource-detail-dialog :deep(.el-descriptions__label) {
+  width: 100px !important;
+  word-wrap: break-word !important;
+  word-break: break-all !important;
+  white-space: normal !important;
+  overflow: hidden !important;
+}
+
+/* 内容列自动换行 */
+.resource-detail-dialog :deep(.el-descriptions__content) {
+  word-wrap: break-word !important;
+  word-break: break-all !important;
+  overflow-wrap: anywhere !important;
+  white-space: normal !important;
+  overflow: hidden !important;
+}
+
+.resource-detail-dialog :deep(.el-descriptions__cell) {
+  overflow: hidden !important;
+}
+
+/* 资源详情内容 */
 .resource-field-content {
-  white-space: pre-wrap;
-  word-wrap: break-word;
+  word-wrap: break-word !important;
+  word-break: break-all !important;
+  overflow-wrap: anywhere !important;
+  white-space: normal !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  display: block !important;
+}
+
+/* 强制所有HTML元素换行 */
+.resource-field-content :deep(*) {
+  max-width: 100% !important;
+  word-wrap: break-word !important;
+  word-break: break-all !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  box-sizing: border-box !important;
+}
+
+/* 强制图片和其他媒体元素适应容器 */
+.resource-field-content :deep(img),
+.resource-field-content :deep(video),
+.resource-field-content :deep(iframe) {
+  max-width: 100% !important;
+  height: auto !important;
+  display: block !important;
+}
+
+/* 强制表格适应容器 */
+.resource-field-content :deep(table) {
+  max-width: 100% !important;
+  table-layout: fixed !important;
+  width: 100% !important;
+}
+
+/* 强制pre和code标签换行 */
+.resource-field-content :deep(pre),
+.resource-field-content :deep(code) {
+  white-space: pre-wrap !important;
+  word-wrap: break-word !important;
+  overflow-wrap: anywhere !important;
 }
 
 /* 响应式设计 */

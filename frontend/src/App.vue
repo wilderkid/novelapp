@@ -1,7 +1,12 @@
 <template>
   <el-container class="app-container" role="main" aria-label="主要应用容器">
     <el-container class="main-layout-container">
-      <el-aside :width="isSidebarCollapsed ? '65px' : '200px'" class="sidebar" role="navigation" aria-label="主要导航">
+      <el-aside
+        :width="isSidebarCollapsed ? '65px' : '200px'"
+        class="sidebar"
+        role="navigation"
+        aria-label="主要导航"
+      >
         <el-menu
           default-active="1"
           class="sidebar-menu"
@@ -42,10 +47,9 @@
             <el-icon><Setting /></el-icon>
             <template #title><span>系统管理</span></template>
           </el-menu-item>
-
         </el-menu>
         <div
-          class="sidebar-toggle" 
+          class="sidebar-toggle"
           @click="toggleSidebar"
           role="button"
           tabindex="0"
@@ -64,8 +68,8 @@
           <router-view />
         </transition>
       </el-main>
-      <CreativeAssistant 
-        v-if="editorStore.creativeAssistantVisible" 
+      <CreativeAssistant
+        v-if="editorStore.creativeAssistantVisible"
         :aria-hidden="!editorStore.creativeAssistantVisible"
       />
     </el-container>
@@ -73,15 +77,26 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { Document, MagicStick, Reading, Collection, Fold, Expand, Cpu, ChatDotRound, Opportunity, Setting } from '@element-plus/icons-vue'
-import { useEditorStore } from './stores/editorStore';
-import CreativeAssistant from './components/CreativeAssistant.vue';
+import { ref } from "vue";
+import { useRouter } from "vue-router";
+import {
+  Document,
+  MagicStick,
+  Reading,
+  Collection,
+  Fold,
+  Expand,
+  Cpu,
+  ChatDotRound,
+  Opportunity,
+  Setting,
+} from "@element-plus/icons-vue";
+import { useEditorStore } from "./stores/editorStore";
+import CreativeAssistant from "./components/CreativeAssistant.vue";
 
-const router = useRouter()
+const router = useRouter();
 const editorStore = useEditorStore();
-const isSidebarCollapsed = ref(false)
+const isSidebarCollapsed = ref(false);
 
 const toggleSidebar = () => {
   isSidebarCollapsed.value = !isSidebarCollapsed.value;
@@ -89,32 +104,32 @@ const toggleSidebar = () => {
 
 const handleMenuSelect = (index) => {
   switch (index) {
-    case '1':
-      router.push('/novels')
-      break
-    case '2':
-      router.push('/chapters')
-      break
-    case '3':
-      router.push('/resources')
-      break
-    case '4':
-      router.push('/prompts')
-      break
-    case '5':
-      router.push('/ai-management')
-      break
-    case '6':
-      router.push('/chat')
-      break
-    case '7':
+    case "1":
+      router.push("/novels");
+      break;
+    case "2":
+      router.push("/chapters");
+      break;
+    case "3":
+      router.push("/resources");
+      break;
+    case "4":
+      router.push("/prompts");
+      break;
+    case "5":
+      router.push("/ai-management");
+      break;
+    case "6":
+      router.push("/chat");
+      break;
+    case "7":
       editorStore.toggleCreativeAssistant();
       break;
-    case '8':
-      router.push('/system')
-      break
+    case "8":
+      router.push("/system");
+      break;
   }
-}
+};
 </script>
 
 <style scoped>
@@ -137,7 +152,7 @@ const handleMenuSelect = (index) => {
   transition: width 0.3s ease;
   display: flex;
   flex-direction: column;
-  box-shadow: 2px 0 8px rgba(0,0,0,0.05);
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.05);
   z-index: 100;
 }
 
@@ -181,7 +196,7 @@ const handleMenuSelect = (index) => {
     height: 100vh;
     z-index: 99;
   }
-  
+
   .main-content {
     padding: 12px;
   }

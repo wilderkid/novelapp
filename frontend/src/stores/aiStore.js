@@ -1,75 +1,84 @@
-import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { defineStore } from "pinia";
+import { ref, computed } from "vue";
 
-export const useAIStore = defineStore('ai', () => {
+export const useAIStore = defineStore("ai", () => {
   // 状态
-  const aiConfigs = ref([])
-  const promptTemplates = ref([])
+  const aiConfigs = ref([]);
+  const promptTemplates = ref([]);
 
   // 计算属性
   const defaultAIConfig = computed(() => {
-    return aiConfigs.value.find(config => config.is_default)
-  })
+    return aiConfigs.value.find((config) => config.is_default);
+  });
 
   const defaultPromptTemplate = computed(() => {
-    return promptTemplates.value.find(template => template.is_default)
-  })
+    return promptTemplates.value.find((template) => template.is_default);
+  });
 
   const promptTemplatesByCategory = computed(() => {
-    const categories = {}
-    promptTemplates.value.forEach(template => {
+    const categories = {};
+    promptTemplates.value.forEach((template) => {
       if (!categories[template.category]) {
-        categories[template.category] = []
+        categories[template.category] = [];
       }
-      categories[template.category].push(template)
-    })
-    return categories
-  })
+      categories[template.category].push(template);
+    });
+    return categories;
+  });
 
   // 方法
   const setAIConfigs = (configs) => {
-    aiConfigs.value = configs
-  }
+    aiConfigs.value = configs;
+  };
 
   const addAIConfig = (config) => {
-    aiConfigs.value.push(config)
-    return config
-  }
+    aiConfigs.value.push(config);
+    return config;
+  };
 
   const updateAIConfig = (configId, updatedData) => {
-    const index = aiConfigs.value.findIndex(config => config.id === configId)
+    const index = aiConfigs.value.findIndex((config) => config.id === configId);
     if (index !== -1) {
-      aiConfigs.value[index] = { ...aiConfigs.value[index], ...updatedData }
-      return aiConfigs.value[index]
+      aiConfigs.value[index] = { ...aiConfigs.value[index], ...updatedData };
+      return aiConfigs.value[index];
     }
-    return null
-  }
+    return null;
+  };
 
   const deleteAIConfig = (configId) => {
-    aiConfigs.value = aiConfigs.value.filter(config => config.id !== configId)
-  }
+    aiConfigs.value = aiConfigs.value.filter(
+      (config) => config.id !== configId,
+    );
+  };
 
   const setPromptTemplates = (templates) => {
-    promptTemplates.value = templates
-  }
+    promptTemplates.value = templates;
+  };
 
   const addPromptTemplate = (template) => {
-    promptTemplates.value.push(template)
-    return template
-  }
+    promptTemplates.value.push(template);
+    return template;
+  };
 
   const updatePromptTemplate = (templateId, updatedData) => {
-    const index = promptTemplates.value.findIndex(template => template.id === templateId)
+    const index = promptTemplates.value.findIndex(
+      (template) => template.id === templateId,
+    );
     if (index !== -1) {
-      promptTemplates.value[index] = { ...promptTemplates.value[index], ...updatedData }
-      return promptTemplates.value[index]
+      promptTemplates.value[index] = {
+        ...promptTemplates.value[index],
+        ...updatedData,
+      };
+      return promptTemplates.value[index];
     }
-    return null
-  }
+    return null;
+  };
 
   const deletePromptTemplate = (templateId) => {
-    promptTemplates.value = promptTemplates.value.filter(template => template.id !== templateId)
-  }
+    promptTemplates.value = promptTemplates.value.filter(
+      (template) => template.id !== templateId,
+    );
+  };
 
   return {
     // 状态
@@ -89,6 +98,6 @@ export const useAIStore = defineStore('ai', () => {
     setPromptTemplates,
     addPromptTemplate,
     updatePromptTemplate,
-    deletePromptTemplate
-  }
-})
+    deletePromptTemplate,
+  };
+});

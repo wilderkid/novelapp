@@ -179,3 +179,12 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# Frontend build files
+frontend/dist/
+frontend/dist-electron/
+frontend/node_modules/
+
+# Backend test files
+backend/test.db
+backend/.pytest_cache/

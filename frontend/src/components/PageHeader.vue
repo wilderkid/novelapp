@@ -3,7 +3,7 @@
     <div class="header-content">
       <div class="header-title">
         <slot name="title">
-          <h2 :class="{ 'compact': compact }">{{ title }}</h2>
+          <h2 :class="{ compact: compact }">{{ title }}</h2>
         </slot>
       </div>
       <div v-if="$slots.actions || actions.length > 0" class="header-actions">
@@ -30,22 +30,22 @@
 </template>
 
 <script setup>
-import { ElButton } from 'element-plus'
+import { ElButton } from "element-plus";
 
 defineProps({
   title: {
     type: String,
-    default: ''
+    default: "",
   },
   actions: {
     type: Array,
-    default: () => []
+    default: () => [],
   },
   compact: {
     type: Boolean,
-    default: false
-  }
-})
+    default: false,
+  },
+});
 </script>
 
 <style scoped>
@@ -91,11 +91,11 @@ defineProps({
     align-items: stretch;
     gap: 15px;
   }
-  
+
   .header-actions {
     justify-content: flex-end;
   }
-  
+
   .header-title h2 {
     text-align: center;
   }
